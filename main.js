@@ -13,6 +13,7 @@ class EarthGlobe {
         this.earthTexture = null;
         this.countryMeshes = [];
         this.borderLines = [];
+        this.extrudedBorders = [];
         this.showCountries = false;
         this.frameCount = 0;
 
@@ -38,6 +39,11 @@ class EarthGlobe {
         this.camera.upperRadiusLimit = 20;
         this.camera.wheelPrecision = 50;
         this.camera.minZ = 0.01; // Adjust near clipping plane
+
+        // Reduce rotation sensitivity for smoother control
+        this.camera.angularSensibilityX = 4000;
+        this.camera.angularSensibilityY = 4000;
+        this.camera.panningSensibility = 4000;
 
         // Create light
         const light = new BABYLON.HemisphericLight(
@@ -234,6 +240,117 @@ class EarthGlobe {
         }
     }
 
+    createExtrudedBorder(latLonPoints, altitude = 0.08) {
+        try {
+            // Convert lat/lon points to 3D sphere coordinates (top edge of border)
+            const topPoints = [];
+            for (const point of latLonPoints) {
+                const vertex = this.latLonToSphere(point.lat, point.lon, altitude);
+                topPoints.push(vertex);
+            }
+
+            if (topPoints.length < 2) {
+                return null;
+            }
+
+            // Calculate extrude ratio - scale points toward sphere center
+            // Bottom edge is closer to sphere center
+            const extrudeDepth = 0.05; // Depth of the border wall
+            const bottomRadius = EARTH_RADIUS + altitude - extrudeDepth;
+            const topRadius = EARTH_RADIUS + altitude;
+            const extrudeRatio = bottomRadius / topRadius;
+
+            // Create bottom points by scaling top points toward center
+            const bottomPoints = [];
+            for (const topPoint of topPoints) {
+                const bottomPoint = topPoint.scale(extrudeRatio);
+                bottomPoints.push(bottomPoint);
+            }
+
+            // Build extruded border mesh (quad strip)
+            const positions = [];
+            const indices = [];
+            const normals = [];
+            const uvs = [];
+
+            let cumulativeDistance = 0;
+            const totalPoints = topPoints.length;
+
+            // Create quads for each edge
+            for (let i = 0; i < totalPoints; i++) {
+                const nextI = (i + 1) % totalPoints;
+
+                // Current quad vertices
+                const top = topPoints[i];
+                const bottom = bottomPoints[i];
+                const nextTop = topPoints[nextI];
+                const nextBottom = bottomPoints[nextI];
+
+                // Calculate distance for UV mapping
+                const edgeDistance = BABYLON.Vector3.Distance(top, nextTop);
+                const startU = cumulativeDistance;
+                cumulativeDistance += edgeDistance;
+                const endU = cumulativeDistance;
+
+                // Add vertices (4 per quad)
+                const baseIndex = positions.length / 3;
+
+                // Bottom left
+                positions.push(bottom.x, bottom.y, bottom.z);
+                // Top left
+                positions.push(top.x, top.y, top.z);
+                // Bottom right
+                positions.push(nextBottom.x, nextBottom.y, nextBottom.z);
+                // Top right
+                positions.push(nextTop.x, nextTop.y, nextTop.z);
+
+                // Calculate normal (perpendicular to the quad face, pointing outward)
+                const edge1 = nextTop.subtract(top);
+                const edge2 = bottom.subtract(top);
+                const normal = BABYLON.Vector3.Cross(edge1, edge2).normalize();
+
+                // Add normals (same for all 4 vertices of the quad)
+                for (let j = 0; j < 4; j++) {
+                    normals.push(normal.x, normal.y, normal.z);
+                }
+
+                // Add UVs
+                uvs.push(startU, 0); // Bottom left
+                uvs.push(startU, 1); // Top left
+                uvs.push(endU, 0);   // Bottom right
+                uvs.push(endU, 1);   // Top right
+
+                // Add triangles (2 per quad) - winding order for outward facing
+                // Triangle 1: bottom-left, top-left, bottom-right
+                indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
+                // Triangle 2: top-left, top-right, bottom-right
+                indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
+            }
+
+            // Create custom mesh
+            const borderMesh = new BABYLON.Mesh("extrudedBorder", this.scene);
+
+            const vertexData = new BABYLON.VertexData();
+            vertexData.positions = positions;
+            vertexData.indices = indices;
+            vertexData.normals = normals;
+            vertexData.uvs = uvs;
+
+            vertexData.applyToMesh(borderMesh);
+
+            // Create unlit material for the extruded border
+            const material = new BABYLON.StandardMaterial("extrudedBorderMat", this.scene);
+            material.emissiveColor = new BABYLON.Color3(0.9, 0.9, 0.9); // Light gray, unlit
+            material.disableLighting = true; // Unlit shader
+            borderMesh.material = material;
+
+            return borderMesh;
+        } catch (error) {
+            console.error("Error creating extruded border:", error);
+            return null;
+        }
+    }
+
     addCountry(coordinates) {
         if (this.countryMeshes.length >= MAX_COUNTRIES) {
             console.error("Max countries reached");
@@ -255,10 +372,16 @@ class EarthGlobe {
             this.countryMeshes.push(mesh);
             this.showCountries = true;
 
-            // Create border lines for this country
+            // Create border lines (tubes) for this country
             const borderLines = this.createCountryBorderLines(latLonPoints, 0.09);
             if (borderLines) {
                 this.borderLines.push(borderLines);
+            }
+
+            // Create extruded border walls for this country
+            const extrudedBorder = this.createExtrudedBorder(latLonPoints, 0.08);
+            if (extrudedBorder) {
+                this.extrudedBorders.push(extrudedBorder);
             }
 
             console.log("Country added successfully. Total:", this.countryMeshes.length);
