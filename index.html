@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Babylon.js Earth Globe</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            width: 100%;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #333;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+
+        #fps {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            color: #333;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+
+        #status {
+            position: absolute;
+            top: 90px;
+            left: 10px;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: rgba(0, 150, 0, 0.8);
+            padding: 5px 10px;
+            border-radius: 50%;
+            width: 10px;
+            height: 10px;
+            z-index: 100;
+        }
+    </style>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="info">Drag with mouse to rotate camera</div>
+    <div id="fps">FPS: 0</div>
+    <div id="status"></div>
+
+    <script src="main.js"></script>
+</body>
+</html>
