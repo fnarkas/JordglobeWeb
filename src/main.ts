@@ -10,12 +10,24 @@ interface LatLonPoint {
     lon: number;
 }
 
-interface CountryData {
+interface PolygonData {
     mesh: BABYLON.Mesh;
     borderLine: BABYLON.Mesh | null;
     extrudedBorder: BABYLON.Mesh | null;
     borderPoints: LatLonPoint[];
-    neighbour_indices: number[];
+    countryIndex: number;  // Back-reference to parent country
+}
+
+interface NeighborInfo {
+    countryIndex: number;           // Which country is the neighbor
+    polygonIndex: number;            // Which of OUR polygons touches them
+    neighbourPolygonIndex: number;   // Which of THEIR polygons we touch
+}
+
+interface CountryData {
+    name: string;
+    polygonIndices: number[];    // Indices into polygonsData array
+    neighbourCountries: NeighborInfo[];
 }
 
 interface RGBColor {
@@ -35,7 +47,8 @@ class EarthGlobe {
     private scene: BABYLON.Scene;
     private camera: BABYLON.ArcRotateCamera;
     private earthSphere: BABYLON.Mesh;
-    private countriesData: CountryData[];
+    private polygonsData: PolygonData[];  // Flat array of all polygons
+    private countriesData: CountryData[];  // Country-level metadata
     private showCountries: boolean;
     private frameCount: number;
 
@@ -52,6 +65,7 @@ class EarthGlobe {
             this.scene
         );
         this.earthSphere = BABYLON.MeshBuilder.CreateSphere("temp", {}, this.scene);
+        this.polygonsData = [];
         this.countriesData = [];
         this.showCountries = false;
         this.frameCount = 0;
@@ -125,9 +139,9 @@ class EarthGlobe {
         const tubeBordersToggle = document.getElementById('tubeBordersToggle') as HTMLInputElement;
         tubeBordersToggle.addEventListener('change', (e) => {
             const isVisible = (e.target as HTMLInputElement).checked;
-            for (const countryData of this.countriesData) {
-                if (countryData.borderLine) {
-                    countryData.borderLine.setEnabled(isVisible);
+            for (const polygon of this.polygonsData) {
+                if (polygon.borderLine) {
+                    polygon.borderLine.setEnabled(isVisible);
                 }
             }
         });
@@ -136,9 +150,9 @@ class EarthGlobe {
         const extrudedBordersToggle = document.getElementById('extrudedBordersToggle') as HTMLInputElement;
         extrudedBordersToggle.addEventListener('change', (e) => {
             const isVisible = (e.target as HTMLInputElement).checked;
-            for (const countryData of this.countriesData) {
-                if (countryData.extrudedBorder) {
-                    countryData.extrudedBorder.setEnabled(isVisible);
+            for (const polygon of this.polygonsData) {
+                if (polygon.extrudedBorder) {
+                    polygon.extrudedBorder.setEnabled(isVisible);
                 }
             }
         });
@@ -222,7 +236,7 @@ class EarthGlobe {
 
             // Create material with varying colors
             const material = new BABYLON.StandardMaterial("countryMat", this.scene);
-            const hue = (this.countriesData.length % 360) / 360;
+            const hue = (this.polygonsData.length % 360) / 360;
             const color = this.hsvToRgb(hue, 0.7, 0.9);
             material.diffuseColor = new BABYLON.Color3(color.r, color.g, color.b);
             material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
@@ -407,10 +421,10 @@ class EarthGlobe {
         }
     }
 
-    private addCountry(coordinates: number[]): void {
-        if (this.countriesData.length >= MAX_COUNTRIES) {
-            console.error("Max countries reached");
-            return;
+    private addPolygon(coordinates: number[], countryIndex: number): number | null {
+        if (this.polygonsData.length >= MAX_COUNTRIES) {
+            console.error("Max polygons reached");
+            return null;
         }
 
         // Convert flat array to lat/lon points
@@ -427,24 +441,28 @@ class EarthGlobe {
         if (mesh) {
             this.showCountries = true;
 
-            // Create border lines (tubes) for this country
+            // Create border lines (tubes) for this polygon
             const borderLine = this.createCountryBorderLines(latLonPoints, 0.09);
 
-            // Create extruded border walls for this country
+            // Create extruded border walls for this polygon
             const extrudedBorder = this.createExtrudedBorder(latLonPoints, 0.08);
 
-            // Store all country data together
-            const countryData: CountryData = {
+            // Store polygon data
+            const polygonData: PolygonData = {
                 mesh: mesh,
                 borderLine: borderLine,
                 extrudedBorder: extrudedBorder,
                 borderPoints: latLonPoints,
-                neighbour_indices: []
+                countryIndex: countryIndex
             };
-            this.countriesData.push(countryData);
 
-            console.log("Country added successfully. Total:", this.countriesData.length);
+            const polygonIndex = this.polygonsData.length;
+            this.polygonsData.push(polygonData);
+
+            return polygonIndex;
         }
+
+        return null;
     }
 
     private async loadCountries(): Promise<void> {
@@ -461,9 +479,9 @@ class EarthGlobe {
 
                 try {
                     const paths = JSON.parse(country.paths) as number[][][];
-                    let polygonCount = 0;
+                    const polygonIndices: number[] = [];
 
-                    // Process all polygons (including islands)
+                    // Process all polygons (including islands) for this country
                     for (const polygon of paths) {
                         if (polygon.length === 0) continue;
 
@@ -489,12 +507,23 @@ class EarthGlobe {
 
                         if (flatCoords.length < 6) continue; // Need at least 3 points
 
-                        this.addCountry(flatCoords);
-                        polygonCount++;
+                        // Add this polygon with reference to the country
+                        const polygonIndex = this.addPolygon(flatCoords, this.countriesData.length);
+                        if (polygonIndex !== null) {
+                            polygonIndices.push(polygonIndex);
+                        }
                     }
 
-                    if (polygonCount > 0) {
-                        console.log('Added country:', country.name_en, 'with', polygonCount, 'polygon(s)');
+                    if (polygonIndices.length > 0) {
+                        // Create country metadata
+                        const countryData: CountryData = {
+                            name: country.name_en,
+                            polygonIndices: polygonIndices,
+                            neighbourCountries: []
+                        };
+                        this.countriesData.push(countryData);
+
+                        console.log('Added country:', country.name_en, 'with', polygonIndices.length, 'polygon(s)');
                         addedCount++;
                     }
                 } catch (e) {
@@ -502,7 +531,7 @@ class EarthGlobe {
                 }
             }
 
-            console.log('Added', addedCount, 'countries');
+            console.log('Added', addedCount, 'countries with', this.polygonsData.length, 'total polygons');
 
             // Detect neighbors after all countries are loaded
             this.detectNeighbors();
@@ -517,24 +546,51 @@ class EarthGlobe {
     }
 
     private detectNeighbors(): void {
-        console.log('Detecting neighbors...');
+        console.log('Detecting neighbors at country level...');
         const startTime = performance.now();
 
-        // For each country, check all other countries for shared border points
-        for (let i = 0; i < this.countriesData.length; i++) {
-            const country1 = this.countriesData[i];
-            if (!country1.borderPoints) continue;
+        // For each pair of countries, check all their polygons for shared border points
+        for (let countryIdx1 = 0; countryIdx1 < this.countriesData.length; countryIdx1++) {
+            const country1 = this.countriesData[countryIdx1];
 
-            for (let j = i + 1; j < this.countriesData.length; j++) {
-                const country2 = this.countriesData[j];
-                if (!country2.borderPoints) continue;
+            for (let countryIdx2 = countryIdx1 + 1; countryIdx2 < this.countriesData.length; countryIdx2++) {
+                const country2 = this.countriesData[countryIdx2];
 
-                // Check if countries share any border points
-                const areNeighbors = this.sharesBorderPoint(country1.borderPoints, country2.borderPoints);
+                // Check all polygon combinations between these two countries
+                for (const polyIdx1 of country1.polygonIndices) {
+                    const polygon1 = this.polygonsData[polyIdx1];
 
-                if (areNeighbors) {
-                    country1.neighbour_indices.push(j);
-                    country2.neighbour_indices.push(i);
+                    for (const polyIdx2 of country2.polygonIndices) {
+                        const polygon2 = this.polygonsData[polyIdx2];
+
+                        // Check if these two polygons share any border points
+                        if (this.sharesBorderPoint(polygon1.borderPoints, polygon2.borderPoints)) {
+                            // Found a match! Record this neighbor relationship
+                            const neighbor1: NeighborInfo = {
+                                countryIndex: countryIdx2,
+                                polygonIndex: polyIdx1,
+                                neighbourPolygonIndex: polyIdx2
+                            };
+
+                            const neighbor2: NeighborInfo = {
+                                countryIndex: countryIdx1,
+                                polygonIndex: polyIdx2,
+                                neighbourPolygonIndex: polyIdx1
+                            };
+
+                            // Check if we already recorded this country as a neighbor (from another polygon pair)
+                            if (!country1.neighbourCountries.some(n => n.countryIndex === countryIdx2)) {
+                                country1.neighbourCountries.push(neighbor1);
+                            }
+
+                            if (!country2.neighbourCountries.some(n => n.countryIndex === countryIdx1)) {
+                                country2.neighbourCountries.push(neighbor2);
+                            }
+
+                            // Once we find any touching polygons, these countries are neighbors
+                            // We could break here, but continuing allows us to record all polygon pairs
+                        }
+                    }
                 }
             }
         }
@@ -546,11 +602,12 @@ class EarthGlobe {
         let totalNeighbors = 0;
         let maxNeighbors = 0;
         for (const country of this.countriesData) {
-            totalNeighbors += country.neighbour_indices.length;
-            maxNeighbors = Math.max(maxNeighbors, country.neighbour_indices.length);
+            totalNeighbors += country.neighbourCountries.length;
+            maxNeighbors = Math.max(maxNeighbors, country.neighbourCountries.length);
         }
         console.log(`Total neighbor relationships: ${totalNeighbors / 2}`);
         console.log(`Max neighbors for a single country: ${maxNeighbors}`);
+        console.log(`Countries: ${this.countriesData.length}, Polygons: ${this.polygonsData.length}`);
 
         // Make data available globally for testing
         (window as any).earthGlobe = this;
