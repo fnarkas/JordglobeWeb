@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -117,8 +118,51 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+
+        /* Bottom UI Panel */
+        #bottomPanel {
+            position: fixed;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 120px;
+            background: linear-gradient(to bottom, rgba(100, 150, 220, 0.95), rgba(80, 130, 200, 0.95));
+            border-radius: 60px 60px 0 0;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 201;
+            pointer-events: none;
+        }
+
+        #pinButton {
+            position: fixed;
+            bottom: -140px;
+            left: 50%;
+            margin-left: 140px;
+            transform: translateX(-50%) rotate(8deg);
+            width: 250px;
+            height: 375px;
+            background: url('/DefaultPin.png') no-repeat center center;
+            background-size: contain;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s;
+            padding: 0;
+            background-color: transparent;
+            z-index: 200;
+        }
+
+        #pinButton:hover {
+            transform: translateX(-50%) rotate(8deg) scale(1.05);
+        }
+
+        #pinButton:active {
+            transform: translateX(-50%) rotate(8deg) scale(0.95);
+        }
     </style>
 </head>
+
 <body>
     <canvas id="renderCanvas"></canvas>
     <div id="info">Drag with mouse to rotate camera</div>
@@ -148,6 +192,10 @@
         <pre id="error-message"></pre>
     </div>
 
+    <button id="pinButton" title="Place Pin"></button>
+    <div id="bottomPanel"></div>
+
     <script type="module" src="/src/main.ts"></script>
 </body>
+
 </html>
