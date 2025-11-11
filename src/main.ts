@@ -55,6 +55,7 @@ class EarthGlobe {
     private animationData: Float32Array;  // Animation values for each country
     private showCountries: boolean;
     private frameCount: number;
+    private sceneInstrumentation: BABYLON.SceneInstrumentation;
 
     constructor() {
         this.canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
@@ -77,6 +78,10 @@ class EarthGlobe {
         this.animationData = new Float32Array(256);  // Support up to 256 countries
         this.showCountries = false;
         this.frameCount = 0;
+
+        // Initialize scene instrumentation for accurate performance metrics
+        this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
+        this.sceneInstrumentation.captureFrameTime = true;
 
         this.init();
     }
@@ -770,7 +775,7 @@ class EarthGlobe {
             true,  // allow32BitsIndices
             undefined,  // meshSubclass
             false,  // subdivideWithSubMeshes
-            true   // multiMultiMaterial
+            false  // multiMultiMaterial - single material for entire mesh
         );
 
         if (this.mergedTubeBorders) {
@@ -845,7 +850,7 @@ class EarthGlobe {
             true,  // allow32BitsIndices
             undefined,  // meshSubclass
             false,  // subdivideWithSubMeshes
-            true   // multiMultiMaterial
+            false  // multiMultiMaterial - single material for entire mesh
         );
 
         if (this.mergedExtrudedBorders) {
@@ -904,7 +909,7 @@ class EarthGlobe {
         // Get draw calls from scene instrumentation
         const drawCallsElement = document.getElementById('drawCalls');
         if (drawCallsElement) {
-            const drawCalls = this.scene.getActiveMeshes().length;
+            const drawCalls = this.sceneInstrumentation.drawCallsCounter.current;
             drawCallsElement.textContent = `${drawCalls}`;
         }
 
@@ -933,6 +938,7 @@ class EarthGlobe {
         // Debug logging every 60 frames
         if (this.frameCount % 60 === 0) {
             console.log(`Frame ${this.frameCount}: animationData[0]=${this.animationData[0].toFixed(3)}, animationData[5]=${this.animationData[5].toFixed(3)}, animationData[10]=${this.animationData[10].toFixed(3)}, animationData[20]=${this.animationData[20].toFixed(3)}`);
+            console.log(`Total meshes in scene: ${this.scene.meshes.length}, Active meshes: ${this.scene.getActiveMeshes().length}`);
         }
 
         // Update the texture with new animation values
