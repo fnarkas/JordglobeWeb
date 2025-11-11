@@ -2,8 +2,28 @@
 import * as BABYLON from '@babylonjs/core';
 import earcut from 'earcut';
 
+// Constants
 const EARTH_RADIUS = 2.0;
 const MAX_COUNTRIES = 5000;
+const MAX_ANIMATION_COUNTRIES = 256;
+
+// Altitude constants
+const COUNTRY_ALTITUDE = 0.08;
+const BORDER_LINE_ALTITUDE = 0.09;
+const EXTRUDED_BORDER_DEPTH = 0.05;
+
+// Animation constants
+const ANIMATION_AMPLITUDE = 0.08;
+
+// Border rendering constants
+const TUBE_RADIUS = 0.002;
+const TUBE_TESSELLATION = 8;
+
+// Color constants
+const COUNTRY_HSV_SATURATION = 0.7;
+const COUNTRY_HSV_VALUE = 0.9;
+const BORDER_COLOR_WHITE = new BABYLON.Color3(1, 1, 1);
+const BORDER_COLOR_GRAY = new BABYLON.Color3(0.9, 0.9, 0.9);
 
 interface LatLonPoint {
     lat: number;
@@ -28,12 +48,6 @@ interface CountryData {
     name: string;
     polygonIndices: number[];    // Indices into polygonsData array
     neighbourCountries: NeighborInfo[];
-}
-
-interface RGBColor {
-    r: number;
-    g: number;
-    b: number;
 }
 
 interface CountryJSON {
@@ -77,7 +91,7 @@ class EarthGlobe {
         this.mergedTubeBorders = null;
         this.mergedExtrudedBorders = null;
         this.animationTexture = null;
-        this.animationData = new Float32Array(256);  // Support up to 256 countries
+        this.animationData = new Float32Array(MAX_ANIMATION_COUNTRIES);
         this.showCountries = false;
         this.frameCount = 0;
 
@@ -198,7 +212,7 @@ class EarthGlobe {
         return indices;
     }
 
-    private createCountryMesh(latLonPoints: LatLonPoint[], altitude: number = 0.08): BABYLON.Mesh | null {
+    private createCountryMesh(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE): BABYLON.Mesh | null {
         if (latLonPoints.length < 3) {
             console.error("Not enough points to create mesh");
             return null;
@@ -248,8 +262,8 @@ class EarthGlobe {
             // Create material with varying colors
             const material = new BABYLON.StandardMaterial("countryMat", this.scene);
             const hue = (this.polygonsData.length % 360) / 360;
-            const color = this.hsvToRgb(hue, 0.7, 0.9);
-            material.diffuseColor = new BABYLON.Color3(color.r, color.g, color.b);
+            const color = this.hsvToRgb(hue, COUNTRY_HSV_SATURATION, COUNTRY_HSV_VALUE);
+            material.diffuseColor = color;
             material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
             customMesh.material = material;
@@ -261,7 +275,7 @@ class EarthGlobe {
         }
     }
 
-    private hsvToRgb(h: number, s: number, v: number): RGBColor {
+    private hsvToRgb(h: number, s: number, v: number): BABYLON.Color3 {
         let r: number, g: number, b: number;
 
         const i = Math.floor(h * 6);
@@ -280,10 +294,10 @@ class EarthGlobe {
             default: r = 0; g = 0; b = 0; break;
         }
 
-        return { r, g, b };
+        return new BABYLON.Color3(r, g, b);
     }
 
-    private createCountryBorderLines(latLonPoints: LatLonPoint[], altitude: number = 0.09, countryIndex: number = 0): BABYLON.Mesh | null {
+    private createCountryBorderLines(latLonPoints: LatLonPoint[], altitude: number = BORDER_LINE_ALTITUDE, countryIndex: number = 0): BABYLON.Mesh | null {
         try {
             // Convert lat/lon points to 3D sphere coordinates
             const points3D: BABYLON.Vector3[] = [];
@@ -303,8 +317,8 @@ class EarthGlobe {
                 "borderLine",
                 {
                     path: points3D,
-                    radius: 0.002,
-                    tessellation: 8,
+                    radius: TUBE_RADIUS,
+                    tessellation: TUBE_TESSELLATION,
                     cap: BABYLON.Mesh.CAP_ALL
                 },
                 this.scene
@@ -323,7 +337,7 @@ class EarthGlobe {
         }
     }
 
-    private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = 0.08, countryIndex: number = 0): BABYLON.Mesh | null {
+    private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, countryIndex: number = 0): BABYLON.Mesh | null {
         try {
             // Convert lat/lon points to 3D sphere coordinates (top edge of border)
             const topPoints: BABYLON.Vector3[] = [];
@@ -338,8 +352,7 @@ class EarthGlobe {
 
             // Calculate extrude ratio - scale points toward sphere center
             // Bottom edge is closer to sphere center
-            const extrudeDepth = 0.05;
-            const bottomRadius = EARTH_RADIUS + altitude - extrudeDepth;
+            const bottomRadius = EARTH_RADIUS + altitude - EXTRUDED_BORDER_DEPTH;
             const topRadius = EARTH_RADIUS + altitude;
             const extrudeRatio = bottomRadius / topRadius;
 
@@ -447,16 +460,16 @@ class EarthGlobe {
             });
         }
 
-        const mesh = this.createCountryMesh(latLonPoints, 0.08);
+        const mesh = this.createCountryMesh(latLonPoints, COUNTRY_ALTITUDE);
 
         if (mesh) {
             this.showCountries = true;
 
             // Create border lines (tubes) for this polygon
-            const borderLine = this.createCountryBorderLines(latLonPoints, 0.09, countryIndex);
+            const borderLine = this.createCountryBorderLines(latLonPoints, BORDER_LINE_ALTITUDE, countryIndex);
 
             // Create extruded border walls for this polygon
-            const extrudedBorder = this.createExtrudedBorder(latLonPoints, 0.08, countryIndex);
+            const extrudedBorder = this.createExtrudedBorder(latLonPoints, COUNTRY_ALTITUDE, countryIndex);
 
             // Store polygon data
             const polygonData: PolygonData = {
@@ -652,8 +665,8 @@ class EarthGlobe {
     }
 
     private createAnimationTexture(): void {
-        // Create a 256x1 texture to store animation values
-        this.animationTexture = new BABYLON.DynamicTexture("animationTexture", { width: 256, height: 1 }, this.scene, false);
+        // Create texture to store animation values per country
+        this.animationTexture = new BABYLON.DynamicTexture("animationTexture", { width: MAX_ANIMATION_COUNTRIES, height: 1 }, this.scene, false);
 
         // Set willReadFrequently for better performance since we update this every frame
         const context = this.animationTexture.getContext() as CanvasRenderingContext2D;
@@ -669,10 +682,10 @@ class EarthGlobe {
         if (!this.animationTexture) return;
 
         const context = this.animationTexture.getContext() as CanvasRenderingContext2D;
-        const imageData = context.getImageData(0, 0, 256, 1);
+        const imageData = context.getImageData(0, 0, MAX_ANIMATION_COUNTRIES, 1);
 
         // Write animation values to texture (RGBA, but we only use R channel)
-        for (let i = 0; i < 256; i++) {
+        for (let i = 0; i < MAX_ANIMATION_COUNTRIES; i++) {
             const value = this.animationData[i];
             const pixelIndex = i * 4;
             imageData.data[pixelIndex] = value * 255;      // R channel
@@ -685,7 +698,8 @@ class EarthGlobe {
         this.animationTexture.update();
     }
 
-    private createBorderShaderMaterial(name: string, baseColor: BABYLON.Color3): BABYLON.ShaderMaterial {
+    // Shared vertex shader - used by all animated meshes
+    private createAnimatedVertexShader(name: string, varyings: string = ""): void {
         BABYLON.Effect.ShadersStore[`${name}VertexShader`] = `
             precision highp float;
 
@@ -699,29 +713,31 @@ class EarthGlobe {
             uniform mat4 world;
             uniform sampler2D animationTexture;
 
-            // Varying
-            varying vec3 vNormal;
+            // Varyings
+            ${varyings}
 
             void main(void) {
                 // Read animation value from texture
-                float texCoord = countryIndex / 256.0;
+                float texCoord = countryIndex / ${MAX_ANIMATION_COUNTRIES}.0;
                 float animValue = texture2D(animationTexture, vec2(texCoord, 0.5)).r;
 
                 // Apply animation - scale outward from center
                 vec3 animatedPosition = position;
                 vec3 centerDir = normalize(position);
-                animatedPosition += centerDir * animValue * 0.08;  // Subtle animation
+                animatedPosition += centerDir * animValue * ${ANIMATION_AMPLITUDE};
 
                 gl_Position = worldViewProjection * vec4(animatedPosition, 1.0);
-                vNormal = normalize((world * vec4(normal, 0.0)).xyz);
+
+                ${varyings.includes('vCountryIndex') ? 'vCountryIndex = countryIndex;' : ''}
             }
         `;
+    }
+
+    private createBorderShaderMaterial(name: string, baseColor: BABYLON.Color3): BABYLON.ShaderMaterial {
+        this.createAnimatedVertexShader(name);
 
         BABYLON.Effect.ShadersStore[`${name}FragmentShader`] = `
             precision highp float;
-
-            // Varying
-            varying vec3 vNormal;
 
             // Uniforms
             uniform vec3 baseColor;
@@ -751,48 +767,12 @@ class EarthGlobe {
 
     private createCountryShaderMaterial(): BABYLON.ShaderMaterial {
         const name = "countryShader";
-
-        BABYLON.Effect.ShadersStore[`${name}VertexShader`] = `
-            precision highp float;
-
-            // Attributes
-            attribute vec3 position;
-            attribute vec3 normal;
-            attribute float countryIndex;
-
-            // Uniforms
-            uniform mat4 worldViewProjection;
-            uniform mat4 world;
-            uniform sampler2D animationTexture;
-
-            // Varying
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-            varying float vCountryIndex;
-
-            void main(void) {
-                // Read animation value from texture
-                float texCoord = countryIndex / 256.0;
-                float animValue = texture2D(animationTexture, vec2(texCoord, 0.5)).r;
-
-                // Apply animation - scale outward from center
-                vec3 animatedPosition = position;
-                vec3 centerDir = normalize(position);
-                animatedPosition += centerDir * animValue * 0.08;  // Subtle animation
-
-                gl_Position = worldViewProjection * vec4(animatedPosition, 1.0);
-                vNormal = normalize((world * vec4(normal, 0.0)).xyz);
-                vPosition = (world * vec4(animatedPosition, 1.0)).xyz;
-                vCountryIndex = countryIndex;
-            }
-        `;
+        this.createAnimatedVertexShader(name, "varying float vCountryIndex;");
 
         BABYLON.Effect.ShadersStore[`${name}FragmentShader`] = `
             precision highp float;
 
             // Varying
-            varying vec3 vNormal;
-            varying vec3 vPosition;
             varying float vCountryIndex;
 
             // HSV to RGB conversion
@@ -805,13 +785,9 @@ class EarthGlobe {
             void main(void) {
                 // Create unique color per country using HSV
                 float hue = fract(vCountryIndex / 360.0);
-                vec3 color = hsv2rgb(vec3(hue, 0.7, 0.9));
+                vec3 color = hsv2rgb(vec3(hue, ${COUNTRY_HSV_SATURATION}, ${COUNTRY_HSV_VALUE}));
 
-                // Simple lighting
-                vec3 lightDir = normalize(vec3(0.0, 1.0, 0.0));
-                float diffuse = max(dot(vNormal, lightDir), 0.3);
-
-                gl_FragColor = vec4(color * diffuse, 1.0);
+                gl_FragColor = vec4(color, 1.0);
             }
         `;
 
@@ -832,249 +808,134 @@ class EarthGlobe {
         return shaderMaterial;
     }
 
-    private mergeTubeBorders(): void {
-        console.log('Merging tube borders into single mesh...');
+    // Generic merge function - DRY approach for all mesh merging
+    private mergeMeshesWithAnimation(
+        meshGetter: (polygon: PolygonData) => BABYLON.Mesh | null,
+        meshName: string,
+        materialCreator: () => BABYLON.ShaderMaterial,
+        meshSetter?: (polygon: PolygonData, merged: BABYLON.Mesh) => void
+    ): BABYLON.Mesh | null {
+        console.log(`Merging ${meshName}...`);
         const startTime = performance.now();
 
-        // Collect all tube border meshes and their vertex counts BEFORE merging
-        const tubeMeshes: BABYLON.Mesh[] = [];
+        // Collect meshes and their vertex counts BEFORE merging
+        const meshes: BABYLON.Mesh[] = [];
         const vertexCounts: number[] = [];
         const countryIndicesPerMesh: number[] = [];
 
         for (const polygon of this.polygonsData) {
-            if (polygon.borderLine) {
-                tubeMeshes.push(polygon.borderLine);
-                vertexCounts.push(polygon.borderLine.getTotalVertices());
+            const mesh = meshGetter(polygon);
+            if (mesh) {
+                meshes.push(mesh);
+                vertexCounts.push(mesh.getTotalVertices());
                 countryIndicesPerMesh.push(polygon.countryIndex);
             }
         }
 
-        if (tubeMeshes.length === 0) {
-            console.log('No tube borders to merge');
-            return;
+        if (meshes.length === 0) {
+            console.log(`No ${meshName} to merge`);
+            return null;
         }
 
-        // Merge all tubes into a single mesh
-        this.mergedTubeBorders = BABYLON.Mesh.MergeMeshes(
-            tubeMeshes,
-            true,  // disposeSource - dispose original meshes
+        // Merge all meshes into a single mesh
+        const mergedMesh = BABYLON.Mesh.MergeMeshes(
+            meshes,
+            true,  // disposeSource
             true,  // allow32BitsIndices
             undefined,  // meshSubclass
             false,  // subdivideWithSubMeshes
-            false  // multiMultiMaterial - single material for entire mesh
+            false  // multiMultiMaterial
         );
 
-        if (this.mergedTubeBorders) {
-            this.mergedTubeBorders.name = "mergedTubeBorders";
-
-            // Rebuild countryIndex attribute (MergeMeshes doesn't preserve custom attributes)
-            const totalVertices = this.mergedTubeBorders.getTotalVertices();
-            const countryIndices = new Float32Array(totalVertices);
-
-            let vertexOffset = 0;
-            for (let meshIdx = 0; meshIdx < vertexCounts.length; meshIdx++) {
-                const vertexCount = vertexCounts[meshIdx];
-                const countryIndex = countryIndicesPerMesh[meshIdx];
-                for (let i = 0; i < vertexCount; i++) {
-                    countryIndices[vertexOffset + i] = countryIndex;
-                }
-                vertexOffset += vertexCount;
-            }
-
-            // Create a custom vertex buffer for countryIndex
-            const buffer = new BABYLON.VertexBuffer(
-                this.engine,
-                countryIndices,
-                "countryIndex",
-                false,  // updatable
-                false,  // postponeInternalCreation
-                1,      // stride: 1 float per vertex
-                false   // instanced
-            );
-            this.mergedTubeBorders.setVerticesBuffer(buffer);
-
-            // Create shader material for animation
-            const material = this.createBorderShaderMaterial("tubeBorderShader", new BABYLON.Color3(1, 1, 1));
-            this.mergedTubeBorders.material = material;
-
-            // Clear references in polygonsData since meshes are now merged
-            for (const polygon of this.polygonsData) {
-                polygon.borderLine = null;
-            }
-
-            const endTime = performance.now();
-            console.log(`Merged ${tubeMeshes.length} tube borders in ${(endTime - startTime).toFixed(2)}ms`);
+        if (!mergedMesh) {
+            console.error(`Failed to merge ${meshName}`);
+            return null;
         }
+
+        mergedMesh.name = meshName;
+
+        // Rebuild countryIndex attribute (MergeMeshes doesn't preserve custom attributes)
+        const totalVertices = mergedMesh.getTotalVertices();
+        const countryIndices = new Float32Array(totalVertices);
+
+        let vertexOffset = 0;
+        for (let meshIdx = 0; meshIdx < vertexCounts.length; meshIdx++) {
+            const vertexCount = vertexCounts[meshIdx];
+            const countryIndex = countryIndicesPerMesh[meshIdx];
+            for (let i = 0; i < vertexCount; i++) {
+                countryIndices[vertexOffset + i] = countryIndex;
+            }
+            vertexOffset += vertexCount;
+        }
+
+        // Create custom vertex buffer for countryIndex
+        const buffer = new BABYLON.VertexBuffer(
+            this.engine,
+            countryIndices,
+            "countryIndex",
+            false,  // updatable
+            false,  // postponeInternalCreation
+            1,      // stride
+            false   // instanced
+        );
+        mergedMesh.setVerticesBuffer(buffer);
+
+        // Apply shader material
+        mergedMesh.material = materialCreator();
+
+        // Update polygon references
+        if (meshSetter) {
+            for (const polygon of this.polygonsData) {
+                meshSetter(polygon, mergedMesh);
+            }
+        }
+
+        const endTime = performance.now();
+        console.log(`Merged ${meshes.length} ${meshName} in ${(endTime - startTime).toFixed(2)}ms`);
+
+        return mergedMesh;
+    }
+
+    private mergeTubeBorders(): void {
+        this.mergedTubeBorders = this.mergeMeshesWithAnimation(
+            (p) => p.borderLine,
+            "mergedTubeBorders",
+            () => this.createBorderShaderMaterial("tubeBorderShader", BORDER_COLOR_WHITE),
+            (p) => p.borderLine = null
+        );
     }
 
     private mergeExtrudedBorders(): void {
-        console.log('Merging extruded borders into single mesh...');
-        const startTime = performance.now();
-
-        // Collect all extruded border meshes and their vertex counts BEFORE merging
-        const extrudedMeshes: BABYLON.Mesh[] = [];
-        const vertexCounts: number[] = [];
-        const countryIndicesPerMesh: number[] = [];
-
-        for (const polygon of this.polygonsData) {
-            if (polygon.extrudedBorder) {
-                extrudedMeshes.push(polygon.extrudedBorder);
-                vertexCounts.push(polygon.extrudedBorder.getTotalVertices());
-                countryIndicesPerMesh.push(polygon.countryIndex);
-            }
-        }
-
-        if (extrudedMeshes.length === 0) {
-            console.log('No extruded borders to merge');
-            return;
-        }
-
-        // Merge all extruded borders into a single mesh
-        this.mergedExtrudedBorders = BABYLON.Mesh.MergeMeshes(
-            extrudedMeshes,
-            true,  // disposeSource - dispose original meshes
-            true,  // allow32BitsIndices
-            undefined,  // meshSubclass
-            false,  // subdivideWithSubMeshes
-            false  // multiMultiMaterial - single material for entire mesh
+        this.mergedExtrudedBorders = this.mergeMeshesWithAnimation(
+            (p) => p.extrudedBorder,
+            "mergedExtrudedBorders",
+            () => this.createBorderShaderMaterial("extrudedBorderShader", BORDER_COLOR_GRAY),
+            (p) => p.extrudedBorder = null
         );
-
-        if (this.mergedExtrudedBorders) {
-            this.mergedExtrudedBorders.name = "mergedExtrudedBorders";
-
-            // Rebuild countryIndex attribute (MergeMeshes doesn't preserve custom attributes)
-            const totalVertices = this.mergedExtrudedBorders.getTotalVertices();
-            const countryIndices = new Float32Array(totalVertices);
-
-            let vertexOffset = 0;
-            for (let meshIdx = 0; meshIdx < vertexCounts.length; meshIdx++) {
-                const vertexCount = vertexCounts[meshIdx];
-                const countryIndex = countryIndicesPerMesh[meshIdx];
-                for (let i = 0; i < vertexCount; i++) {
-                    countryIndices[vertexOffset + i] = countryIndex;
-                }
-                vertexOffset += vertexCount;
-            }
-
-            // Create a custom vertex buffer for countryIndex
-            const buffer = new BABYLON.VertexBuffer(
-                this.engine,
-                countryIndices,
-                "countryIndex",
-                false,  // updatable
-                false,  // postponeInternalCreation
-                1,      // stride: 1 float per vertex
-                false   // instanced
-            );
-            this.mergedExtrudedBorders.setVerticesBuffer(buffer);
-
-            // Create shader material for animation
-            const material = this.createBorderShaderMaterial("extrudedBorderShader", new BABYLON.Color3(0.9, 0.9, 0.9));
-            this.mergedExtrudedBorders.material = material;
-
-            // Clear references in polygonsData since meshes are now merged
-            for (const polygon of this.polygonsData) {
-                polygon.extrudedBorder = null;
-            }
-
-            const endTime = performance.now();
-            console.log(`Merged ${extrudedMeshes.length} extruded borders in ${(endTime - startTime).toFixed(2)}ms`);
-        }
     }
 
     private mergeCountryPolygons(): void {
-        console.log('Merging country polygons into single mesh...');
-        const startTime = performance.now();
-
-        // Collect all country polygon meshes and their vertex counts BEFORE merging
-        const countryMeshes: BABYLON.Mesh[] = [];
-        const vertexCounts: number[] = [];
-        const countryIndicesPerMesh: number[] = [];
-
-        for (const polygon of this.polygonsData) {
-            if (polygon.mesh) {
-                countryMeshes.push(polygon.mesh);
-                vertexCounts.push(polygon.mesh.getTotalVertices());
-                countryIndicesPerMesh.push(polygon.countryIndex);
-            }
-        }
-
-        if (countryMeshes.length === 0) {
-            console.log('No country polygons to merge');
-            return;
-        }
-
-        // Merge all country polygons into a single mesh
-        this.mergedCountries = BABYLON.Mesh.MergeMeshes(
-            countryMeshes,
-            true,  // disposeSource - dispose original meshes
-            true,  // allow32BitsIndices
-            undefined,  // meshSubclass
-            false,  // subdivideWithSubMeshes
-            false  // multiMultiMaterial - single material for entire mesh
+        this.mergedCountries = this.mergeMeshesWithAnimation(
+            (p) => p.mesh,
+            "mergedCountries",
+            () => this.createCountryShaderMaterial(),
+            (p, merged) => p.mesh = merged
         );
-
-        if (this.mergedCountries) {
-            this.mergedCountries.name = "mergedCountries";
-
-            // Rebuild countryIndex attribute (MergeMeshes doesn't preserve custom attributes)
-            const totalVertices = this.mergedCountries.getTotalVertices();
-            const countryIndices = new Float32Array(totalVertices);
-
-            let vertexOffset = 0;
-            for (let meshIdx = 0; meshIdx < vertexCounts.length; meshIdx++) {
-                const vertexCount = vertexCounts[meshIdx];
-                const countryIndex = countryIndicesPerMesh[meshIdx];
-                for (let i = 0; i < vertexCount; i++) {
-                    countryIndices[vertexOffset + i] = countryIndex;
-                }
-                vertexOffset += vertexCount;
-            }
-
-            // Create a custom vertex buffer for countryIndex
-            const buffer = new BABYLON.VertexBuffer(
-                this.engine,
-                countryIndices,
-                "countryIndex",
-                false,  // updatable
-                false,  // postponeInternalCreation
-                1,      // stride: 1 float per vertex
-                false   // instanced
-            );
-            this.mergedCountries.setVerticesBuffer(buffer);
-
-            // Create shader material for animation
-            const material = this.createCountryShaderMaterial();
-            this.mergedCountries.material = material;
-
-            // Clear references in polygonsData (meshes already disposed by MergeMeshes)
-            for (const polygon of this.polygonsData) {
-                polygon.mesh = this.mergedCountries;  // Point to merged mesh
-            }
-
-            const endTime = performance.now();
-            console.log(`Merged ${countryMeshes.length} country polygons in ${(endTime - startTime).toFixed(2)}ms`);
-        }
     }
 
-    private update(): void {
-        this.frameCount++;
-
-        // Update stats
+    private updateStats(): void {
         const fps = Math.round(this.engine.getFps());
         const fpsElement = document.getElementById('fps');
         if (fpsElement) {
             fpsElement.textContent = `${fps}`;
         }
 
-        // Get draw calls from scene instrumentation
         const drawCallsElement = document.getElementById('drawCalls');
         if (drawCallsElement) {
             const drawCalls = this.sceneInstrumentation.drawCallsCounter.current;
             drawCallsElement.textContent = `${drawCalls}`;
         }
 
-        // Get total triangles
         const trianglesElement = document.getElementById('triangles');
         if (trianglesElement) {
             let totalTriangles = 0;
@@ -1085,25 +946,31 @@ class EarthGlobe {
             });
             trianglesElement.textContent = `${Math.round(totalTriangles).toLocaleString()}`;
         }
+    }
 
-        // Animate all countries randomly
+    private updateAnimation(): void {
         const time = Date.now() * 0.001;  // Time in seconds
+
+        // Animate all countries with unique sine wave patterns
         for (let i = 0; i < this.countriesData.length; i++) {
-            // Each country gets a unique sine wave animation
-            // Using different frequencies and offsets for variety
             const offset = i * 0.5;
             const frequency = 0.5 + (i % 10) * 0.1;
             this.animationData[i] = (Math.sin(time * frequency + offset) + 1) * 0.5;  // Range 0-1
         }
+
+        this.updateAnimationTexture();
+    }
+
+    private update(): void {
+        this.frameCount++;
+        this.updateStats();
+        this.updateAnimation();
 
         // Debug logging every 60 frames
         if (this.frameCount % 60 === 0) {
             console.log(`Frame ${this.frameCount}: animationData[0]=${this.animationData[0].toFixed(3)}, animationData[5]=${this.animationData[5].toFixed(3)}, animationData[10]=${this.animationData[10].toFixed(3)}, animationData[20]=${this.animationData[20].toFixed(3)}`);
             console.log(`Total meshes in scene: ${this.scene.meshes.length}, Active meshes: ${this.scene.getActiveMeshes().length}`);
         }
-
-        // Update the texture with new animation values
-        this.updateAnimationTexture();
     }
 }
 
