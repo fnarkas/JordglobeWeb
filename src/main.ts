@@ -85,6 +85,9 @@ class EarthGlobe {
     private previewPin: BABYLON.TransformNode | null;
     private isPlacingMode: boolean;
     private pinButton: HTMLElement | null;
+    private loadingProgress: HTMLElement | null;
+    private loadingText: HTMLElement | null;
+    private loadingScreen: HTMLElement | null;
 
     constructor() {
         this.canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
@@ -113,6 +116,9 @@ class EarthGlobe {
         this.previewPin = null;
         this.isPlacingMode = false;
         this.pinButton = null;
+        this.loadingProgress = document.getElementById('loadingProgress');
+        this.loadingText = document.getElementById('loadingText');
+        this.loadingScreen = document.getElementById('loadingScreen');
 
         // Initialize scene instrumentation for accurate performance metrics
         this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
@@ -121,7 +127,9 @@ class EarthGlobe {
         this.init();
     }
 
-    private init(): void {
+    private async init(): Promise<void> {
+        this.updateLoadingProgress(5, 'Initializing scene...');
+
         // Create scene
         this.scene.clearColor = new BABYLON.Color4(0.95, 0.95, 0.95, 1);
 
@@ -137,6 +145,8 @@ class EarthGlobe {
         this.camera.angularSensibilityY = 4000;
         this.camera.panningSensibility = 4000;
 
+        this.updateLoadingProgress(10, 'Setting up lighting...');
+
         // Create light
         const light = new BABYLON.HemisphericLight(
             "light",
@@ -144,6 +154,8 @@ class EarthGlobe {
             this.scene
         );
         light.intensity = 1.2;
+
+        this.updateLoadingProgress(15, 'Creating earth sphere...');
 
         // Create Earth sphere
         this.createEarthSphere();
@@ -159,19 +171,25 @@ class EarthGlobe {
             this.engine.resize();
         });
 
+        this.updateLoadingProgress(25, 'Loading countries...');
+
         // Load countries
-        this.loadCountries();
+        await this.loadCountries();
+
+        this.updateLoadingProgress(75, 'Loading 3D models...');
 
         // Load BossPin model and create preview pin
-        this.loadBossPinModel().then(() => {
-            this.createPreviewPin();
-        });
+        await this.loadBossPinModel();
+        this.createPreviewPin();
+
+        this.updateLoadingProgress(90, 'Setting up controls...');
 
         // Setup drag-and-drop pin placement
         this.setupPinDragAndDrop();
 
-        // Setup inspector toggle (press 'I' key to open/close)
+        // Setup keyboard shortcuts
         window.addEventListener('keydown', (e) => {
+            // Inspector toggle (I key)
             if (e.key === 'i' || e.key === 'I') {
                 if (this.scene.debugLayer.isVisible()) {
                     this.scene.debugLayer.hide();
@@ -181,7 +199,151 @@ class EarthGlobe {
                     });
                 }
             }
+            // Reload scene (R key)
+            if (e.key === 'r' || e.key === 'R') {
+                this.reloadScene();
+            }
         });
+
+        this.updateLoadingProgress(100, 'Complete!');
+
+        // Hide loading screen after a short delay
+        setTimeout(() => {
+            this.hideLoadingScreen();
+        }, 300);
+    }
+
+    private updateLoadingProgress(percent: number, text: string): void {
+        if (this.loadingProgress) {
+            this.loadingProgress.style.width = `${percent}%`;
+        }
+        if (this.loadingText) {
+            this.loadingText.textContent = text;
+        }
+    }
+
+    private hideLoadingScreen(): void {
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.add('hidden');
+        }
+    }
+
+    private showLoadingScreen(): void {
+        if (this.loadingScreen) {
+            this.loadingScreen.classList.remove('hidden');
+        }
+    }
+
+    private async reloadScene(): Promise<void> {
+        console.log('Reloading scene...');
+
+        // Show loading screen
+        this.showLoadingScreen();
+        this.updateLoadingProgress(0, 'Clearing scene...');
+
+        // Properly dispose of all resources
+        // Dispose placed pins
+        this.placedPins.forEach(pin => {
+            if (pin && pin.dispose) {
+                pin.dispose(false, true); // Don't dispose materials, do recurse to children
+            }
+        });
+        this.placedPins = [];
+
+        // Dispose preview pin
+        if (this.previewPin) {
+            this.previewPin.dispose(false, true);
+            this.previewPin = null;
+        }
+
+        // Dispose boss pin template
+        if (this.bossPinTemplate) {
+            this.bossPinTemplate.dispose(false, true);
+            this.bossPinTemplate = null;
+        }
+
+        // Dispose country meshes
+        this.countryMeshes.forEach(mesh => {
+            if (mesh) mesh.dispose(false, true);
+        });
+        this.countryMeshes = [];
+
+        // Dispose merged meshes
+        if (this.mergedCountries) {
+            this.mergedCountries.dispose(false, true);
+            this.mergedCountries = null;
+        }
+        if (this.mergedTubeBorders) {
+            this.mergedTubeBorders.dispose(false, true);
+            this.mergedTubeBorders = null;
+        }
+        if (this.mergedExtrudedBorders) {
+            this.mergedExtrudedBorders.dispose(false, true);
+            this.mergedExtrudedBorders = null;
+        }
+
+        // Dispose earth sphere
+        if (this.earthSphere) {
+            this.earthSphere.dispose(false, true);
+        }
+
+        // Dispose animation texture
+        if (this.animationTexture) {
+            this.animationTexture.dispose();
+            this.animationTexture = null;
+        }
+
+        // Stop render loop
+        this.engine.stopRenderLoop();
+
+        this.updateLoadingProgress(5, 'Disposing scene...');
+
+        // Dispose scene (this will clean up all remaining resources)
+        this.scene.dispose();
+
+        // Wait a bit for cleanup
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        this.updateLoadingProgress(10, 'Recreating engine...');
+
+        // Don't dispose engine - just reuse it
+        // Create new scene
+        this.scene = new BABYLON.Scene(this.engine);
+
+        // Recreate camera
+        this.camera = new BABYLON.ArcRotateCamera(
+            "camera",
+            Math.PI / 2,
+            Math.PI / 2,
+            10,
+            BABYLON.Vector3.Zero(),
+            this.scene
+        );
+
+        // Reset all properties
+        this.earthSphere = null!;
+        this.polygonsData = [];
+        this.countriesData = [];
+        this.mergedCountries = null;
+        this.mergedTubeBorders = null;
+        this.mergedExtrudedBorders = null;
+        this.animationTexture = null;
+        this.animationData = new Float32Array(MAX_ANIMATION_COUNTRIES);
+        this.showCountries = false;
+        this.frameCount = 0;
+        this.bossPinTemplate = null;
+        this.placedPins = [];
+        this.previewPin = null;
+        this.isPlacingMode = false;
+
+        // Reinitialize
+        this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
+        this.sceneInstrumentation.captureFrameTime = true;
+
+        this.updateLoadingProgress(15, 'Recreating scene...');
+
+        // Reinitialize scene
+        await this.init();
     }
 
     private createEarthSphere(): void {
