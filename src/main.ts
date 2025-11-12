@@ -1101,6 +1101,9 @@ class EarthGlobe {
             this.pinButton.style.display = 'none';
         }
 
+        // Hide cursor during placing mode
+        document.body.classList.add('placing-mode');
+
         // Disable camera controls
         this.camera.detachControl();
 
@@ -1117,6 +1120,9 @@ class EarthGlobe {
         if (this.pinButton) {
             this.pinButton.style.display = 'block';
         }
+
+        // Show cursor again
+        document.body.classList.remove('placing-mode');
 
         // Re-enable camera controls
         this.camera.attachControl(this.canvas, true);
