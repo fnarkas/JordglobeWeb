@@ -1327,7 +1327,7 @@ class EarthGlobe {
         const pickResult = this.scene.pick(event.clientX, event.clientY);
 
         if (pickResult.hit && pickResult.pickedPoint) {
-            // Show the pin when we hit the globe
+            // Show the pin when we hit the globe for the first time
             if (!this.previewPin.isEnabled()) {
                 this.previewPin.setEnabled(true);
             }
@@ -1347,12 +1347,9 @@ class EarthGlobe {
                 new BABYLON.Quaternion()
             );
             this.previewPin.rotationQuaternion = rotationQuat;
-        } else {
-            // Hide the pin when not over the globe
-            if (this.previewPin.isEnabled()) {
-                this.previewPin.setEnabled(false);
-            }
         }
+        // Don't hide the pin when not over the globe - keep it at last position
+        // It will only be hidden when exiting placing mode
     }
 
 }
