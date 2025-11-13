@@ -3,6 +3,7 @@ import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 import '@babylonjs/inspector';
 import earcut from 'earcut';
+import { loadBorderData, type BorderData } from './borderLoader';
 
 // Import shaders
 import animatedVertexShader from './shaders/animated.vertex.glsl?raw';
@@ -88,6 +89,7 @@ class EarthGlobe {
     private loadingProgress: HTMLElement | null;
     private loadingText: HTMLElement | null;
     private loadingScreen: HTMLElement | null;
+    private borderData: BorderData | null;
 
     constructor() {
         this.canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
@@ -119,6 +121,7 @@ class EarthGlobe {
         this.loadingProgress = document.getElementById('loadingProgress');
         this.loadingText = document.getElementById('loadingText');
         this.loadingScreen = document.getElementById('loadingScreen');
+        this.borderData = null;
 
         // Initialize scene instrumentation for accurate performance metrics
         this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
@@ -516,6 +519,33 @@ class EarthGlobe {
         }
     }
 
+    private createBorderTubeFromPath(points3D: BABYLON.Vector3[], countryIndex: number = 0): BABYLON.Mesh | null {
+        try {
+            // Create tube along the pre-computed path
+            const tube = BABYLON.MeshBuilder.CreateTube(
+                "borderLine",
+                {
+                    path: points3D,
+                    radius: TUBE_RADIUS,
+                    tessellation: TUBE_TESSELLATION,
+                    cap: BABYLON.Mesh.CAP_ALL
+                },
+                this.scene
+            );
+
+            // Create unlit white material for the border (not affected by light)
+            const material = new BABYLON.StandardMaterial("borderMat", this.scene);
+            material.emissiveColor = new BABYLON.Color3(1, 1, 1);
+            material.disableLighting = true;
+            tube.material = material;
+
+            return tube;
+        } catch (error) {
+            console.error("Error creating border tube from path:", error);
+            return null;
+        }
+    }
+
     private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, countryIndex: number = 0): BABYLON.Mesh | null {
         try {
             // Convert lat/lon points to 3D sphere coordinates (top edge of border)
@@ -624,7 +654,7 @@ class EarthGlobe {
         }
     }
 
-    private addPolygon(coordinates: number[], countryIndex: number): number | null {
+    private addPolygon(coordinates: number[], countryIndex: number, borderPath?: BABYLON.Vector3[]): number | null {
         if (this.polygonsData.length >= MAX_COUNTRIES) {
             console.error("Max polygons reached");
             return null;
@@ -645,7 +675,15 @@ class EarthGlobe {
             this.showCountries = true;
 
             // Create border lines (tubes) for this polygon
-            const borderLine = this.createCountryBorderLines(latLonPoints, BORDER_LINE_ALTITUDE, countryIndex);
+            let borderLine: BABYLON.Mesh | null = null;
+            if (borderPath) {
+                // Use pre-baked border path
+                borderLine = this.createBorderTubeFromPath(borderPath, countryIndex);
+            } else {
+                // Fallback to computing border path (old method)
+                console.warn(`⚠️ No pre-baked border found, falling back to computation for polygon ${this.polygonsData.length}`);
+                borderLine = this.createCountryBorderLines(latLonPoints, BORDER_LINE_ALTITUDE, countryIndex);
+            }
 
             // Create extruded border walls for this polygon
             const extrudedBorder = this.createExtrudedBorder(latLonPoints, COUNTRY_ALTITUDE, countryIndex);
@@ -670,12 +708,16 @@ class EarthGlobe {
 
     private async loadCountries(): Promise<void> {
         try {
+            // Load binary border data first
+            this.borderData = await loadBorderData('borders.bin');
+
             const response = await fetch('countries.json');
             const countries = await response.json() as CountryJSON[];
 
             console.log('Loaded', countries.length, 'countries');
 
             let addedCount = 0;
+            let borderIndex = 0; // Track which border we're using from the binary data
 
             for (const country of countries) {
                 if (!country.paths || country.paths === '[]') continue;
@@ -683,6 +725,9 @@ class EarthGlobe {
                 try {
                     const paths = JSON.parse(country.paths) as number[][][];
                     const polygonIndices: number[] = [];
+
+                    // Get the pre-baked borders for this country
+                    const countryBorders = this.borderData.countries[addedCount];
 
                     // Process all polygons (including islands) for this country
                     for (const polygon of paths) {
@@ -710,8 +755,14 @@ class EarthGlobe {
 
                         if (flatCoords.length < 6) continue; // Need at least 3 points
 
-                        // Add this polygon with reference to the country
-                        const polygonIndex = this.addPolygon(flatCoords, this.countriesData.length);
+                        // Get the corresponding border path from binary data
+                        const borderPathIndex = polygonIndices.length; // Index within this country's polygons
+                        const borderPath = countryBorders && borderPathIndex < countryBorders.borders.length
+                            ? countryBorders.borders[borderPathIndex].points
+                            : undefined;
+
+                        // Add this polygon with reference to the country and pre-baked border
+                        const polygonIndex = this.addPolygon(flatCoords, this.countriesData.length, borderPath);
                         if (polygonIndex !== null) {
                             polygonIndices.push(polygonIndex);
                         }
@@ -735,6 +786,14 @@ class EarthGlobe {
             }
 
             console.log('Added', addedCount, 'countries with', this.polygonsData.length, 'total polygons');
+
+            // Log border loading statistics
+            if (this.borderData) {
+                const usedBorders = this.polygonsData.filter(p => p.borderLine !== null).length;
+                console.log(`✓ Using pre-baked borders: ${usedBorders}/${this.polygonsData.length} polygons (${this.borderData.totalBorders} total borders in file)`);
+            } else {
+                console.warn('⚠️ No binary border data loaded - computed all borders from scratch');
+            }
 
             // Create animation texture before merging
             this.createAnimationTexture();
