@@ -93,7 +93,6 @@ class EarthGlobe {
     private loadingText: HTMLElement | null;
     private loadingScreen: HTMLElement | null;
     private borderData: BorderData | null;
-    private pinButton: HTMLElement | null;
     private tempQuaternion: BABYLON.Quaternion;  // Reusable quaternion to avoid allocations
 
     constructor() {
@@ -129,7 +128,6 @@ class EarthGlobe {
         this.loadingText = document.getElementById('loadingText');
         this.loadingScreen = document.getElementById('loadingScreen');
         this.borderData = null;
-        this.pinButton = null;
         this.tempQuaternion = new BABYLON.Quaternion();
 
         // Initialize scene instrumentation for accurate performance metrics
