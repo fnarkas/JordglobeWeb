@@ -4,7 +4,7 @@ import '@babylonjs/loaders/glTF';
 import '@babylonjs/inspector';
 import * as GUI from '@babylonjs/gui';
 import earcut from 'earcut';
-import { loadBorderData, type BorderData } from './borderLoader';
+import { loadBorderData, type BorderData } from './borderLoaderWasm';
 
 // Import shaders
 import animatedVertexShader from './shaders/animated.vertex.glsl?raw';
@@ -697,12 +697,14 @@ class EarthGlobe {
 
             // Create border lines (tubes) for this polygon
             let borderLine: BABYLON.Mesh | null = null;
-            if (borderPath) {
+            if (borderPath && borderPath.length >= 2) {
                 // Use pre-baked border path
                 borderLine = this.createBorderTubeFromPath(borderPath, countryIndex);
             } else {
                 // Fallback to computing border path (old method)
-                console.warn(`⚠️ No pre-baked border found, falling back to computation for polygon ${this.polygonsData.length}`);
+                if (borderPath && borderPath.length < 2) {
+                    console.warn(`⚠️ Pre-baked border has insufficient points (${borderPath.length}), falling back to computation`);
+                }
                 borderLine = this.createCountryBorderLines(latLonPoints, BORDER_LINE_ALTITUDE, countryIndex);
             }
 

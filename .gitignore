@@ -19,3 +19,6 @@ Thumbs.db
 
 # Vite
 .vite/
+
+# WASM build artifacts (source wasm gets copied to public/)
+wasm/*.wasm
