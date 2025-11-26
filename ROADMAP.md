@@ -2,11 +2,16 @@
 
 ## Upcoming Features
 
-- [ ] Pin should scale down according to current camera zoom
-- [ ] Treeshaking of Babylon.js to make build smaller
-- [ ] Right mouse button on globe enters placing mode, release exits
+- [ ] Small countries should have markers so they are easier to see
+- [ ] Small countries should have a special look
+- [ ] Low-res colliders that are easier to hit
+- [ ] When scrolling on the earth with the pin on the edge, rotate the earth
 
 ## Completed
+
+- [x] Pin scales based on camera zoom distance (smaller when close, larger when far)
+- [x] Right mouse button on globe enters placing mode, release exits
+- [x] Tree-shaking Babylon.js (bundle reduced from ~11.7 MB to ~1.9 MB, inspector loaded dynamically)
 
 - [x] Country animation now off by default, toggleable with 'A' key
 - [x] Removed mergedTubeBorders (and all tube border code, borderData loading)

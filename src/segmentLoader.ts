@@ -4,7 +4,7 @@
  * Loads segments.json and converts 2D lat/lon coordinates to 3D sphere positions
  */
 
-import * as BABYLON from '@babylonjs/core';
+import { Vector3 } from '@babylonjs/core/Maths/math';
 
 const EARTH_RADIUS = 2.0;
 const BORDER_LINE_ALTITUDE = 0.08;  // Match COUNTRY_ALTITUDE
@@ -21,7 +21,7 @@ export interface Segment2D {
 }
 
 export interface Segment3D {
-    points: BABYLON.Vector3[];
+    points: Vector3[];
     countries: string[];
     type: 'standalone' | 'shared' | 'multipoint';
 }
@@ -34,7 +34,7 @@ export interface SegmentData {
 /**
  * Convert lat/lon to 3D sphere position
  */
-function latLonToSphere(lat: number, lon: number, altitude: number = 0): BABYLON.Vector3 {
+function latLonToSphere(lat: number, lon: number, altitude: number = 0): Vector3 {
     const latRad = (lat * Math.PI) / 180.0;
     const lonRad = (lon * Math.PI) / 180.0;
     const radius = EARTH_RADIUS + altitude;
@@ -43,7 +43,7 @@ function latLonToSphere(lat: number, lon: number, altitude: number = 0): BABYLON
     const y = radius * Math.sin(latRad);
     const z = radius * Math.cos(latRad) * Math.sin(lonRad);
 
-    return new BABYLON.Vector3(x, y, z);
+    return new Vector3(x, y, z);
 }
 
 /**

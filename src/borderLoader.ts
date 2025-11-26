@@ -4,12 +4,12 @@
  * Loads pre-baked border tube paths from borders.bin
  */
 
-import * as BABYLON from '@babylonjs/core';
+import { Vector3 } from '@babylonjs/core/Maths/math';
 
 const MAGIC_NUMBER = 0x54424F52; // "TBOR"
 
 export interface BorderPath {
-    points: BABYLON.Vector3[];
+    points: Vector3[];
 }
 
 export interface CountryBorders {
@@ -66,12 +66,12 @@ export async function loadBorderData(url: string = 'borders.bin'): Promise<Borde
             const numPoints = dataView.getUint32(offset, true); offset += 4;
 
             // Read points
-            const points: BABYLON.Vector3[] = [];
+            const points: Vector3[] = [];
             for (let k = 0; k < numPoints; k++) {
                 const x = dataView.getFloat32(offset, true); offset += 4;
                 const y = dataView.getFloat32(offset, true); offset += 4;
                 const z = dataView.getFloat32(offset, true); offset += 4;
-                points.push(new BABYLON.Vector3(x, y, z));
+                points.push(new Vector3(x, y, z));
             }
 
             borders.push({ points });

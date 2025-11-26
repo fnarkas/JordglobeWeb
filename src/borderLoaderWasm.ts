@@ -4,10 +4,10 @@
  * Loads pre-baked border tube paths from borders.bin using Odin WebAssembly
  */
 
-import * as BABYLON from '@babylonjs/core';
+import { Vector3 } from '@babylonjs/core/Maths/math';
 
 export interface BorderPath {
-    points: BABYLON.Vector3[];
+    points: Vector3[];
 }
 
 export interface CountryBorders {
@@ -233,12 +233,12 @@ export async function loadBorderData(url: string = 'borders.bin'): Promise<Borde
                 actualPoints * 3
             );
 
-            const points: BABYLON.Vector3[] = [];
+            const points: Vector3[] = [];
             for (let k = 0; k < actualPoints; k++) {
                 const x = pointsView[k * 3 + 0];
                 const y = pointsView[k * 3 + 1];
                 const z = pointsView[k * 3 + 2];
-                points.push(new BABYLON.Vector3(x, y, z));
+                points.push(new Vector3(x, y, z));
             }
 
             borders.push({ points });

@@ -13,9 +13,13 @@
  * - Specular highlights and Fresnel
  */
 
-import * as BABYLON from "@babylonjs/core";
+import { Scene } from '@babylonjs/core/scene';
+import { Vector3 } from '@babylonjs/core/Maths/math';
+import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
+import { Effect } from '@babylonjs/core/Materials/effect';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 
-export function createWaterShader(scene: BABYLON.Scene) {
+export function createWaterShader(scene: Scene) {
   const shaderName = "waterShader";
 
   // Vertex Shader with wave displacement
@@ -314,20 +318,20 @@ export function createWaterShader(scene: BABYLON.Scene) {
   `;
 
   // Register the shader
-  BABYLON.Effect.ShadersStore[shaderName + "VertexShader"] = vertexShader;
-  BABYLON.Effect.ShadersStore[shaderName + "FragmentShader"] = fragmentShader;
+  Effect.ShadersStore[shaderName + "VertexShader"] = vertexShader;
+  Effect.ShadersStore[shaderName + "FragmentShader"] = fragmentShader;
 
   return shaderName;
 }
 
 export function createWaterMaterial(
-  scene: BABYLON.Scene,
+  scene: Scene,
   depthMapPath: string = "OceanDepthMap.png",
   name: string = "waterMaterial"
-): BABYLON.ShaderMaterial {
+): ShaderMaterial {
   const shaderName = createWaterShader(scene);
 
-  const material = new BABYLON.ShaderMaterial(name, scene, shaderName, {
+  const material = new ShaderMaterial(name, scene, shaderName, {
     attributes: ["position", "normal", "uv"],
     uniforms: [
       "worldViewProjection",
@@ -366,20 +370,20 @@ export function createWaterMaterial(
   });
 
   // Load the depth map texture
-  const depthTexture = new BABYLON.Texture(depthMapPath, scene);
+  const depthTexture = new Texture(depthMapPath, scene);
   material.setTexture("depthMap", depthTexture);
 
   // Load the caustics texture (SwsCaustics.png)
-  const causticsTexture = new BABYLON.Texture("SwsCaustics.png", scene);
-  causticsTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
-  causticsTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+  const causticsTexture = new Texture("SwsCaustics.png", scene);
+  causticsTexture.wrapU = Texture.WRAP_ADDRESSMODE;
+  causticsTexture.wrapV = Texture.WRAP_ADDRESSMODE;
   material.setTexture("causticsMap", causticsTexture);
 
   // Set default water colors (matching Unity shader)
-  material.setVector3("shallowColor", new BABYLON.Vector3(0.4, 0.8, 0.95)); // Light cyan
-  material.setVector3("waterColor", new BABYLON.Vector3(0.46, 0.79, 1.0)); // Medium blue
-  material.setVector3("deepColor", new BABYLON.Vector3(0.02, 0.08, 0.25)); // Dark blue
-  material.setVector3("causticColor", new BABYLON.Vector3(1.0, 1.0, 1.0)); // White caustics (Unity: Color_AA9D37A8)
+  material.setVector3("shallowColor", new Vector3(0.4, 0.8, 0.95)); // Light cyan
+  material.setVector3("waterColor", new Vector3(0.46, 0.79, 1.0)); // Medium blue
+  material.setVector3("deepColor", new Vector3(0.02, 0.08, 0.25)); // Dark blue
+  material.setVector3("causticColor", new Vector3(1.0, 1.0, 1.0)); // White caustics (Unity: Color_AA9D37A8)
 
   // Texture-based caustics settings (matching Unity screenshot)
   material.setFloat("causticScale", 200.0);         // Unity: CausticScale
@@ -389,7 +393,7 @@ export function createWaterMaterial(
   material.setFloat("causticDeformScale", 0.08);    // Unity: CausticDeformScale
 
   // Foam settings (matching Unity GetFoam parameters from screenshot)
-  material.setVector3("foamColor", new BABYLON.Vector3(0.7, 0.95, 1.0)); // Light cyan (Unity: FoamColor)
+  material.setVector3("foamColor", new Vector3(0.7, 0.95, 1.0)); // Light cyan (Unity: FoamColor)
   material.setFloat("foamWidth", 0.99);             // Unity: FoamWidth (upperLimit in GetFoam)
   material.setFloat("foamStrength", 40.0);          // Unity: FoamStrength (rippleStrength)
   material.setFloat("foamNoiseScale", 500.0);       // Unity: FoamNoiseScale

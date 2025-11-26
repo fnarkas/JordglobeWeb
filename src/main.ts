@@ -1,8 +1,44 @@
 // Babylon.js Earth Globe Application
-import * as BABYLON from '@babylonjs/core';
+// Tree-shaken imports for smaller bundle size
+import { Engine } from '@babylonjs/core/Engines/engine';
+import { Scene } from '@babylonjs/core/scene';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { Vector3, Color3, Color4, Quaternion } from '@babylonjs/core/Maths/math';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { ShaderMaterial } from '@babylonjs/core/Materials/shaderMaterial';
+import { Effect } from '@babylonjs/core/Materials/effect';
+import { Material } from '@babylonjs/core/Materials/material';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
+import type { Nullable } from '@babylonjs/core/types';
+import type { Observer } from '@babylonjs/core/Misc/observable';
+
+// Side effect imports (required for some features)
+import '@babylonjs/core/Meshes/meshBuilder';
+import '@babylonjs/core/Loading/loadingScreen';
 import '@babylonjs/loaders/glTF';
-import '@babylonjs/inspector';
-import * as GUI from '@babylonjs/gui';
+import '@babylonjs/core/Materials/PBR/pbrMaterial';  // Required for glTF material support
+
+// Inspector - only include in development builds
+if (import.meta.env.DEV) {
+    import('@babylonjs/inspector');
+}
+
+// GUI imports
+import { AdvancedDynamicTexture } from '@babylonjs/gui/2D/advancedDynamicTexture';
+import { Control } from '@babylonjs/gui/2D/controls/control';
+import { Image } from '@babylonjs/gui/2D/controls/image';
+import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
+import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import { cdt2d, filterTriangles } from './cdt2d';
 import { loadSegments, getSharedSegments, type SegmentData, type Segment3D } from './segmentLoader';
 import { createWaterMaterial } from './waterShader';
@@ -35,8 +71,8 @@ const TUBE_TESSELLATION = 8;
 // Color constants
 const COUNTRY_HSV_SATURATION = 0.7;
 const COUNTRY_HSV_VALUE = 0.9;
-const BORDER_COLOR_WHITE = new BABYLON.Color3(1, 1, 1);
-const BORDER_COLOR_GRAY = new BABYLON.Color3(0.9, 0.9, 0.9);
+const BORDER_COLOR_WHITE = new Color3(1, 1, 1);
+const BORDER_COLOR_GRAY = new Color3(0.9, 0.9, 0.9);
 
 
 interface LatLonPoint {
@@ -45,8 +81,8 @@ interface LatLonPoint {
 }
 
 interface PolygonData {
-    mesh: BABYLON.Mesh;
-    extrudedBorder: BABYLON.Mesh | null;
+    mesh: Mesh;
+    extrudedBorder: Mesh | null;
     borderPoints: LatLonPoint[];
     countryIndex: number;  // Back-reference to parent country
 }
@@ -76,37 +112,38 @@ interface CountryJSON {
 
 class EarthGlobe {
     private canvas: HTMLCanvasElement;
-    private engine: BABYLON.Engine;
-    private scene: BABYLON.Scene;
-    private camera: BABYLON.ArcRotateCamera;
-    private earthSphere: BABYLON.Mesh;
+    private engine: Engine;
+    private scene: Scene;
+    private camera: ArcRotateCamera;
+    private earthSphere: Mesh;
     private polygonsData: PolygonData[];  // Flat array of all polygons
     private countriesData: CountryData[];  // Country-level metadata
     private totalTriangleCount: number;  // Track total triangles for comparison
-    private mergedCountries: BABYLON.Mesh | null;  // Single merged mesh for all country polygons
-    private mergedExtrudedBorders: BABYLON.Mesh | null;  // Single merged mesh for all extruded borders
-    private animationTexture: BABYLON.DynamicTexture | null;  // Texture storing animation values per country
+    private mergedCountries: Mesh | null;  // Single merged mesh for all country polygons
+    private mergedExtrudedBorders: Mesh | null;  // Single merged mesh for all extruded borders
+    private animationTexture: DynamicTexture | null;  // Texture storing animation values per country
     private animationData: Float32Array;  // Animation values for each country
     private showCountries: boolean;
     private animationEnabled: boolean;  // Toggle for country animation (A key)
     private frameCount: number;
-    private sceneInstrumentation: BABYLON.SceneInstrumentation;
-    private bossPinTemplate: BABYLON.AbstractMesh | null;
-    private placedPins: BABYLON.AbstractMesh[];
-    private previewPin: BABYLON.TransformNode | null;
+    private sceneInstrumentation: SceneInstrumentation;
+    private bossPinTemplate: AbstractMesh | null;
+    private placedPins: AbstractMesh[];
+    private previewPin: TransformNode | null;
+    private previewPinContainer: TransformNode | null;
     private isPlacingMode: boolean;
-    private advancedTexture: GUI.AdvancedDynamicTexture | null;
-    private pinButtonImage: GUI.Image | null;
-    private bottomPanel: GUI.Rectangle | null;
+    private advancedTexture: AdvancedDynamicTexture | null;
+    private pinButtonImage: Image | null;
+    private bottomPanel: Rectangle | null;
     private loadingProgress: HTMLElement | null;
     private loadingText: HTMLElement | null;
     private loadingScreen: HTMLElement | null;
     private segmentData: SegmentData | null;
-    private mergedSegmentBorders: BABYLON.Mesh | null;  // Merged mesh for segment borders
+    private mergedSegmentBorders: Mesh | null;  // Merged mesh for segment borders
     private segmentAnimationIndices: Map<number, number[]>;  // Map from segment index to array of country indices
     private textureBuffer: Uint8ClampedArray | null;  // Pre-allocated buffer for texture updates
-    private tempQuaternion: BABYLON.Quaternion;  // Reusable quaternion to avoid allocations
-    private waterMaterial: BABYLON.ShaderMaterial | null;  // Water shader material for parameter adjustments
+    private tempQuaternion: Quaternion;  // Reusable quaternion to avoid allocations
+    private waterMaterial: ShaderMaterial | null;  // Water shader material for parameter adjustments
     private countryPicker: CountryPicker;  // Spatial index for fast country lookup from lat/lon
     private hoveredCountry: CountryPolygon | null;  // Currently hovered country (during pin placement)
     private onCountrySelected: ((country: CountryPolygon | null, latLon: LatLon) => void) | null;  // Callback for country selection (pin placed)
@@ -115,14 +152,14 @@ class EarthGlobe {
 
     constructor() {
         this.canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
-        this.engine = new BABYLON.Engine(this.canvas, true, { preserveDrawingBuffer: false, stencil: true });
-        this.scene = new BABYLON.Scene(this.engine);
-        this.camera = new BABYLON.ArcRotateCamera(
+        this.engine = new Engine(this.canvas, true, { preserveDrawingBuffer: false, stencil: true });
+        this.scene = new Scene(this.engine);
+        this.camera = new ArcRotateCamera(
             "camera",
             Math.PI / 2,
             Math.PI / 2,
             10,
-            BABYLON.Vector3.Zero(),
+            Vector3.Zero(),
             this.scene
         );
         this.earthSphere = null!; // Will be created in createEarthSphere()
@@ -139,6 +176,7 @@ class EarthGlobe {
         this.bossPinTemplate = null;
         this.placedPins = [];
         this.previewPin = null;
+        this.previewPinContainer = null;
         this.isPlacingMode = false;
         this.advancedTexture = null;
         this.pinButtonImage = null;
@@ -150,7 +188,7 @@ class EarthGlobe {
         this.mergedSegmentBorders = null;
         this.segmentAnimationIndices = new Map();
         this.textureBuffer = null;
-        this.tempQuaternion = new BABYLON.Quaternion();
+        this.tempQuaternion = new Quaternion();
         this.waterMaterial = null;
         this.countryPicker = new CountryPicker(10);  // 10° grid cells
         this.hoveredCountry = null;
@@ -159,7 +197,7 @@ class EarthGlobe {
         this.selectionBehavior = null;  // Will be created after GUI
 
         // Initialize scene instrumentation for accurate performance metrics
-        this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
+        this.sceneInstrumentation = new SceneInstrumentation(this.scene);
         this.sceneInstrumentation.captureFrameTime = true;
 
         this.init();
@@ -244,7 +282,7 @@ class EarthGlobe {
         this.updateLoadingProgress(5, 'Initializing scene...');
 
         // Create scene
-        this.scene.clearColor = new BABYLON.Color4(0.95, 0.95, 0.95, 1);
+        this.scene.clearColor = new Color4(0.95, 0.95, 0.95, 1);
 
         // Create camera
         this.camera.attachControl(this.canvas, true);
@@ -261,9 +299,9 @@ class EarthGlobe {
         this.updateLoadingProgress(10, 'Setting up lighting...');
 
         // Create light
-        const light = new BABYLON.HemisphericLight(
+        const light = new HemisphericLight(
             "light",
-            new BABYLON.Vector3(0, 1, 0),
+            new Vector3(0, 1, 0),
             this.scene
         );
         light.intensity = 1.2;
@@ -321,15 +359,9 @@ class EarthGlobe {
 
         // Setup keyboard shortcuts
         window.addEventListener('keydown', (e) => {
-            // Inspector toggle (I key)
+            // Inspector toggle (I key) - dynamically loaded
             if (e.key === 'i' || e.key === 'I') {
-                if (this.scene.debugLayer.isVisible()) {
-                    this.scene.debugLayer.hide();
-                } else {
-                    this.scene.debugLayer.show({
-                        embedMode: true,
-                    });
-                }
+                this.toggleInspector();
             }
             // Reload scene (R key)
             if (e.key === 'r' || e.key === 'R') {
@@ -453,15 +485,15 @@ class EarthGlobe {
 
         // Don't dispose engine - just reuse it
         // Create new scene
-        this.scene = new BABYLON.Scene(this.engine);
+        this.scene = new Scene(this.engine);
 
         // Recreate camera
-        this.camera = new BABYLON.ArcRotateCamera(
+        this.camera = new ArcRotateCamera(
             "camera",
             Math.PI / 2,
             Math.PI / 2,
             10,
-            BABYLON.Vector3.Zero(),
+            Vector3.Zero(),
             this.scene
         );
 
@@ -480,14 +512,15 @@ class EarthGlobe {
         this.bossPinTemplate = null;
         this.placedPins = [];
         this.previewPin = null;
+        this.previewPinContainer = null;
         this.isPlacingMode = false;
-        this.tempQuaternion = new BABYLON.Quaternion();
+        this.tempQuaternion = new Quaternion();
         this.countryPicker = new CountryPicker(10);
         this.hoveredCountry = null;
         // Note: Keep onCountrySelected callback across reloads
 
         // Reinitialize
-        this.sceneInstrumentation = new BABYLON.SceneInstrumentation(this.scene);
+        this.sceneInstrumentation = new SceneInstrumentation(this.scene);
         this.sceneInstrumentation.captureFrameTime = true;
 
         this.updateLoadingProgress(15, 'Recreating scene...');
@@ -498,7 +531,7 @@ class EarthGlobe {
 
     private createEarthSphere(): void {
         // Create sphere for Earth
-        this.earthSphere = BABYLON.MeshBuilder.CreateSphere(
+        this.earthSphere = MeshBuilder.CreateSphere(
             "earth",
             { diameter: EARTH_RADIUS * 2, segments: 64 },  // Increased segments for smoother water shader
             this.scene
@@ -509,7 +542,7 @@ class EarthGlobe {
         this.earthSphere.material = this.waterMaterial;
     }
 
-    private latLonToSphere(lat: number, lon: number, altitude: number = 0): BABYLON.Vector3 {
+    private latLonToSphere(lat: number, lon: number, altitude: number = 0): Vector3 {
         // Convert degrees to radians
         const latRad = (lat * Math.PI) / 180.0;
         const lonRad = (lon * Math.PI) / 180.0;
@@ -521,7 +554,7 @@ class EarthGlobe {
         const y = radius * Math.sin(latRad);
         const z = radius * Math.cos(latRad) * Math.sin(lonRad);
 
-        return new BABYLON.Vector3(x, y, z);
+        return new Vector3(x, y, z);
     }
 
     /**
@@ -674,7 +707,7 @@ class EarthGlobe {
         }
     }
 
-    private createCountryMesh(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, holes?: LatLonPoint[][]): BABYLON.Mesh | null {
+    private createCountryMesh(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, holes?: LatLonPoint[][]): Mesh | null {
         if (latLonPoints.length < 3) {
             console.error("Not enough points to create mesh");
             return null;
@@ -729,9 +762,9 @@ class EarthGlobe {
             }
 
             // Create custom mesh
-            const customMesh = new BABYLON.Mesh("country", this.scene);
+            const customMesh = new Mesh("country", this.scene);
 
-            const vertexData = new BABYLON.VertexData();
+            const vertexData = new VertexData();
             vertexData.positions = positions;
             vertexData.indices = finalIndices;
             vertexData.normals = normals;
@@ -743,11 +776,11 @@ class EarthGlobe {
             this.totalTriangleCount += finalIndices.length / 3;
 
             // Create material with varying colors
-            const material = new BABYLON.StandardMaterial("countryMat", this.scene);
+            const material = new StandardMaterial("countryMat", this.scene);
             const hue = (this.polygonsData.length % 360) / 360;
             const color = this.hsvToRgb(hue, COUNTRY_HSV_SATURATION, COUNTRY_HSV_VALUE);
             material.diffuseColor = color;
-            material.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+            material.specularColor = new Color3(0.1, 0.1, 0.1);
 
             customMesh.material = material;
 
@@ -758,7 +791,7 @@ class EarthGlobe {
         }
     }
 
-    private hsvToRgb(h: number, s: number, v: number): BABYLON.Color3 {
+    private hsvToRgb(h: number, s: number, v: number): Color3 {
         let r: number, g: number, b: number;
 
         const i = Math.floor(h * 6);
@@ -777,13 +810,13 @@ class EarthGlobe {
             default: r = 0; g = 0; b = 0; break;
         }
 
-        return new BABYLON.Color3(r, g, b);
+        return new Color3(r, g, b);
     }
 
-    private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, countryIndex: number = 0, isHole: boolean = false): BABYLON.Mesh | null {
+    private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, countryIndex: number = 0, isHole: boolean = false): Mesh | null {
         try {
             // Convert lat/lon points to 3D sphere coordinates (top edge of border)
-            const topPoints: BABYLON.Vector3[] = [];
+            const topPoints: Vector3[] = [];
             for (const point of latLonPoints) {
                 const vertex = this.latLonToSphere(point.lat, point.lon, altitude);
                 topPoints.push(vertex);
@@ -800,7 +833,7 @@ class EarthGlobe {
             const extrudeRatio = bottomRadius / topRadius;
 
             // Create bottom points by scaling top points toward center
-            const bottomPoints: BABYLON.Vector3[] = [];
+            const bottomPoints: Vector3[] = [];
             for (const topPoint of topPoints) {
                 const bottomPoint = topPoint.scale(extrudeRatio);
                 bottomPoints.push(bottomPoint);
@@ -826,7 +859,7 @@ class EarthGlobe {
                 const nextBottom = bottomPoints[nextI];
 
                 // Calculate distance for UV mapping
-                const edgeDistance = BABYLON.Vector3.Distance(top, nextTop);
+                const edgeDistance = Vector3.Distance(top, nextTop);
                 const startU = cumulativeDistance;
                 cumulativeDistance += edgeDistance;
                 const endU = cumulativeDistance;
@@ -848,8 +881,8 @@ class EarthGlobe {
                 const edge2 = bottom.subtract(top);
                 // For holes, reverse the normal direction (inward-facing)
                 const normal = isHole
-                    ? BABYLON.Vector3.Cross(edge2, edge1).normalize()  // Reversed cross product
-                    : BABYLON.Vector3.Cross(edge1, edge2).normalize();
+                    ? Vector3.Cross(edge2, edge1).normalize()  // Reversed cross product
+                    : Vector3.Cross(edge1, edge2).normalize();
 
                 // Add normals (same for all 4 vertices of the quad)
                 for (let j = 0; j < 4; j++) {
@@ -868,9 +901,9 @@ class EarthGlobe {
             }
 
             // Create custom mesh
-            const borderMesh = new BABYLON.Mesh("extrudedBorder", this.scene);
+            const borderMesh = new Mesh("extrudedBorder", this.scene);
 
-            const vertexData = new BABYLON.VertexData();
+            const vertexData = new VertexData();
             vertexData.positions = positions;
             vertexData.indices = indices;
             vertexData.normals = normals;
@@ -879,8 +912,8 @@ class EarthGlobe {
             vertexData.applyToMesh(borderMesh);
 
             // Create unlit material for the extruded border
-            const material = new BABYLON.StandardMaterial("extrudedBorderMat", this.scene);
-            material.emissiveColor = new BABYLON.Color3(0.9, 0.9, 0.9);
+            const material = new StandardMaterial("extrudedBorderMat", this.scene);
+            material.emissiveColor = new Color3(0.9, 0.9, 0.9);
             material.disableLighting = true;
             borderMesh.material = material;
 
@@ -930,7 +963,7 @@ class EarthGlobe {
             const extrudedBorder = this.createExtrudedBorder(latLonPoints, COUNTRY_ALTITUDE, countryIndex, false);
 
             // Create extruded borders for holes
-            const holeExtrudedBorders: BABYLON.Mesh[] = [];
+            const holeExtrudedBorders: Mesh[] = [];
             if (holeLatLonPoints && holeLatLonPoints.length > 0) {
                 for (const holePoints of holeLatLonPoints) {
                     const holeExtruded = this.createExtrudedBorder(holePoints, COUNTRY_ALTITUDE, countryIndex, true);
@@ -944,7 +977,7 @@ class EarthGlobe {
             let finalExtrudedBorder = extrudedBorder;
             if (extrudedBorder && holeExtrudedBorders.length > 0) {
                 const allExtrudedBorders = [extrudedBorder, ...holeExtrudedBorders];
-                const merged = BABYLON.Mesh.MergeMeshes(
+                const merged = Mesh.MergeMeshes(
                     allExtrudedBorders,
                     true,  // disposeSource
                     true,  // allow32BitsIndices
@@ -955,7 +988,7 @@ class EarthGlobe {
                 finalExtrudedBorder = merged;
             } else if (holeExtrudedBorders.length > 0) {
                 // No main border but have hole borders
-                const merged = BABYLON.Mesh.MergeMeshes(
+                const merged = Mesh.MergeMeshes(
                     holeExtrudedBorders,
                     true,
                     true,
@@ -1258,7 +1291,7 @@ class EarthGlobe {
     private createAnimationTexture(): void {
         // Create 1D texture (1024x1) to store animation values per country AND per segment
         const textureWidth = 1024;
-        this.animationTexture = new BABYLON.DynamicTexture("animationTexture", { width: textureWidth, height: 1 }, this.scene, false);
+        this.animationTexture = new DynamicTexture("animationTexture", { width: textureWidth, height: 1 }, this.scene, false);
 
         // Pre-allocate buffer for updates
         this.textureBuffer = new Uint8ClampedArray(textureWidth * 4);
@@ -1308,18 +1341,18 @@ class EarthGlobe {
         uniforms: string[],
         varyings: string = "",
         varyingAssignments: string = ""
-    ): BABYLON.ShaderMaterial {
+    ): ShaderMaterial {
         try {
             // Setup vertex shader
             const vertexShader = animatedVertexShader
                 .replace('// VARYINGS_PLACEHOLDER', varyings)
                 .replace('// VARYING_ASSIGNMENTS_PLACEHOLDER', varyingAssignments);
 
-            BABYLON.Effect.ShadersStore[`${name}VertexShader`] = vertexShader;
-            BABYLON.Effect.ShadersStore[`${name}FragmentShader`] = fragmentShader;
+            Effect.ShadersStore[`${name}VertexShader`] = vertexShader;
+            Effect.ShadersStore[`${name}FragmentShader`] = fragmentShader;
 
             // Create shader material
-            const shaderMaterial = new BABYLON.ShaderMaterial(name, this.scene, {
+            const shaderMaterial = new ShaderMaterial(name, this.scene, {
                 vertex: name,
                 fragment: name,
             }, {
@@ -1347,13 +1380,13 @@ class EarthGlobe {
         }
     }
 
-    private createUnlitMaterial(originalMaterial: BABYLON.Material | null): BABYLON.ShaderMaterial {
+    private createUnlitMaterial(originalMaterial: Material | null): ShaderMaterial {
         const materialName = "unlitMaterial_" + Date.now();
 
-        BABYLON.Effect.ShadersStore[`${materialName}VertexShader`] = unlitVertexShader;
-        BABYLON.Effect.ShadersStore[`${materialName}FragmentShader`] = unlitFragmentShader;
+        Effect.ShadersStore[`${materialName}VertexShader`] = unlitVertexShader;
+        Effect.ShadersStore[`${materialName}FragmentShader`] = unlitFragmentShader;
 
-        const shaderMaterial = new BABYLON.ShaderMaterial(materialName, this.scene, {
+        const shaderMaterial = new ShaderMaterial(materialName, this.scene, {
             vertex: materialName,
             fragment: materialName,
         }, {
@@ -1363,7 +1396,7 @@ class EarthGlobe {
         });
 
         // Try to extract color from original material
-        let baseColor = new BABYLON.Color4(1, 1, 1, 1);
+        let baseColor = new Color4(1, 1, 1, 1);
         let hasTexture = false;
 
         if (originalMaterial) {
@@ -1371,10 +1404,10 @@ class EarthGlobe {
             const pbrMat = originalMaterial as any;
             if (pbrMat.albedoColor) {
                 const c = pbrMat.albedoColor;
-                baseColor = new BABYLON.Color4(c.r, c.g, c.b, 1.0);
+                baseColor = new Color4(c.r, c.g, c.b, 1.0);
             } else if (pbrMat.diffuseColor) {
                 const c = pbrMat.diffuseColor;
-                baseColor = new BABYLON.Color4(c.r, c.g, c.b, 1.0);
+                baseColor = new Color4(c.r, c.g, c.b, 1.0);
             }
 
             // Check for textures
@@ -1394,13 +1427,13 @@ class EarthGlobe {
         return shaderMaterial;
     }
 
-    private createBorderShaderMaterial(name: string, baseColor: BABYLON.Color3): BABYLON.ShaderMaterial {
+    private createBorderShaderMaterial(name: string, baseColor: Color3): ShaderMaterial {
         const material = this.createShaderMaterial(name, borderFragmentShader, ["baseColor"]);
         material.setColor3("baseColor", baseColor);
         return material;
     }
 
-    private createCountryShaderMaterial(): BABYLON.ShaderMaterial {
+    private createCountryShaderMaterial(): ShaderMaterial {
         const material = this.createShaderMaterial(
             "countryShader",
             countryFragmentShader,
@@ -1415,16 +1448,16 @@ class EarthGlobe {
 
     // Generic merge function - DRY approach for all mesh merging
     private mergeMeshesWithAnimation(
-        meshGetter: (polygon: PolygonData) => BABYLON.Mesh | null,
+        meshGetter: (polygon: PolygonData) => Mesh | null,
         meshName: string,
-        materialCreator: () => BABYLON.ShaderMaterial,
-        meshSetter?: (polygon: PolygonData, merged: BABYLON.Mesh) => void
-    ): BABYLON.Mesh | null {
+        materialCreator: () => ShaderMaterial,
+        meshSetter?: (polygon: PolygonData, merged: Mesh) => void
+    ): Mesh | null {
         console.log(`Merging ${meshName}...`);
         const startTime = performance.now();
 
         // Collect meshes and their vertex counts BEFORE merging
-        const meshes: BABYLON.Mesh[] = [];
+        const meshes: Mesh[] = [];
         const vertexCounts: number[] = [];
         const countryIndicesPerMesh: number[] = [];
 
@@ -1444,7 +1477,7 @@ class EarthGlobe {
         }
 
         // Merge all meshes into a single mesh
-        const mergedMesh = BABYLON.Mesh.MergeMeshes(
+        const mergedMesh = Mesh.MergeMeshes(
             meshes,
             true,  // disposeSource
             true,  // allow32BitsIndices
@@ -1475,7 +1508,7 @@ class EarthGlobe {
         }
 
         // Create custom vertex buffer for countryIndex
-        const buffer = new BABYLON.VertexBuffer(
+        const buffer = new VertexBuffer(
             this.engine,
             countryIndices,
             "countryIndex",
@@ -1537,7 +1570,7 @@ class EarthGlobe {
         this.segmentAnimationIndices.clear();
 
         // Create tube meshes - one per segment
-        const segmentTubes: BABYLON.Mesh[] = [];
+        const segmentTubes: Mesh[] = [];
         const vertexCounts: number[] = [];
         const segmentIndicesPerTube: number[] = [];
 
@@ -1546,13 +1579,13 @@ class EarthGlobe {
             if (segment.points.length < 2) continue;
 
             try {
-                const tube = BABYLON.MeshBuilder.CreateTube(
+                const tube = MeshBuilder.CreateTube(
                     "segmentBorder",
                     {
                         path: segment.points,
                         radius: TUBE_RADIUS * 1.2,  // Slightly thicker than regular borders
                         tessellation: TUBE_TESSELLATION,
-                        cap: BABYLON.Mesh.CAP_ALL
+                        cap: Mesh.CAP_ALL
                     },
                     this.scene
                 );
@@ -1584,7 +1617,7 @@ class EarthGlobe {
         }
 
         // Merge all segment tubes into a single mesh
-        this.mergedSegmentBorders = BABYLON.Mesh.MergeMeshes(
+        this.mergedSegmentBorders = Mesh.MergeMeshes(
             segmentTubes,
             true,  // disposeSource
             true,  // allow32BitsIndices
@@ -1615,7 +1648,7 @@ class EarthGlobe {
         }
 
         // Create custom vertex buffer for countryIndex (stores segment animation index)
-        const buffer = new BABYLON.VertexBuffer(
+        const buffer = new VertexBuffer(
             this.engine,
             segmentIndices,
             "countryIndex",
@@ -1706,7 +1739,7 @@ class EarthGlobe {
 
     private async loadBossPinModel(): Promise<void> {
         try {
-            const result = await BABYLON.SceneLoader.ImportMeshAsync("", "/", "BossPin.glb", this.scene);
+            const result = await SceneLoader.ImportMeshAsync("", "/", "BossPin.glb", this.scene);
 
             if (result.meshes.length > 0) {
                 console.log(`Loaded ${result.meshes.length} meshes from BossPin.glb`);
@@ -1765,9 +1798,9 @@ class EarthGlobe {
             }
         });
 
-        // Handle pointerup - place pin and exit placing mode
+        // Handle pointerup - place pin and exit placing mode (left or right button)
         this.canvas.addEventListener('pointerup', (e) => {
-            if (this.isPlacingMode) {
+            if (this.isPlacingMode && (e.button === 0 || e.button === 2)) {
                 this.exitPlacingMode(true); // true = place the pin
             }
         });
@@ -1777,6 +1810,25 @@ class EarthGlobe {
             if (this.isPlacingMode) {
                 this.exitPlacingMode(false); // false = don't place the pin
             }
+        });
+
+        // Right-click on globe enters placing mode
+        this.canvas.addEventListener('pointerdown', (e) => {
+            if (e.button === 2 && !this.isPlacingMode) {
+                // Check if clicking on the globe
+                const pickResult = this.scene.pick(e.clientX, e.clientY, (mesh) => {
+                    return mesh === this.earthSphere;
+                });
+                if (pickResult.hit) {
+                    this.enterPlacingMode();
+                    this.updatePreviewPinPosition(e);
+                }
+            }
+        });
+
+        // Prevent context menu on right-click
+        this.canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
         });
     }
 
@@ -1852,23 +1904,23 @@ class EarthGlobe {
     private createPreviewPin(): void {
         if (!this.bossPinTemplate) return;
 
-        const clonedMeshes: BABYLON.AbstractMesh[] = [];
+        const clonedMeshes: AbstractMesh[] = [];
         const originalChildren = this.bossPinTemplate.getChildMeshes();
 
         // Create parent transform node for preview
-        const pinPivot = new BABYLON.TransformNode("previewPinPivot", this.scene);
+        const pinPivot = new TransformNode("previewPinPivot", this.scene);
 
         // Create pin container as child of pivot
-        const pinContainer = new BABYLON.TransformNode("previewPin", this.scene);
-        pinContainer.parent = pinPivot;
+        this.previewPinContainer = new TransformNode("previewPinContainer", this.scene);
+        this.previewPinContainer.parent = pinPivot;
 
-        // Scale the pin
+        // Initial scale (will be updated based on camera zoom)
         const pinScale = 150;
-        pinContainer.scaling = new BABYLON.Vector3(pinScale, pinScale, pinScale);
+        this.previewPinContainer.scaling = new Vector3(pinScale, pinScale, pinScale);
 
         // Clone each child mesh and apply unlit shader
         originalChildren.forEach(child => {
-            const clonedChild = child.clone(child.name + "_preview", pinContainer);
+            const clonedChild = child.clone(child.name + "_preview", this.previewPinContainer);
             if (clonedChild) {
                 clonedChild.setEnabled(true);
                 clonedMeshes.push(clonedChild);
@@ -1889,16 +1941,16 @@ class EarthGlobe {
 
     private createGUI(): void {
         // Create fullscreen UI
-        this.advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, this.scene);
+        this.advancedTexture = AdvancedDynamicTexture.CreateFullscreenUI("UI", true, this.scene);
 
         // Create pin button FIRST so it appears BEHIND the panel
         // Actual image is 196x900px, scale to 1/2
         const pinScale = 0.5;
-        this.pinButtonImage = new GUI.Image("pinButton", "/DefaultPin.png");
+        this.pinButtonImage = new Image("pinButton", "/DefaultPin.png");
         this.pinButtonImage.width = `${196 * pinScale}px`;
         this.pinButtonImage.height = `${900 * pinScale}px`;
-        this.pinButtonImage.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-        this.pinButtonImage.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        this.pinButtonImage.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        this.pinButtonImage.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
         this.pinButtonImage.top = "170px";  // Way down - negative means up from bottom
         this.pinButtonImage.left = "50px";   // Slight offset to the right
         this.pinButtonImage.rotation = 0.14; // 8 degrees in radians
@@ -1925,12 +1977,12 @@ class EarthGlobe {
         this.advancedTexture.addControl(this.pinButtonImage);
 
         // Create bottom panel AFTER pin (so it's in front)
-        this.bottomPanel = new GUI.Rectangle("bottomPanel");
+        this.bottomPanel = new Rectangle("bottomPanel");
         this.bottomPanel.width = "600px";
         this.bottomPanel.height = "150px";
         this.bottomPanel.thickness = 0;
-        this.bottomPanel.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-        this.bottomPanel.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        this.bottomPanel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+        this.bottomPanel.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
         this.bottomPanel.top = "30px";
 
         // Solid blue color - no transparency
@@ -1995,6 +2047,14 @@ class EarthGlobe {
                 this.previewPin.setEnabled(true);
             }
 
+            // Scale pin based on camera distance (smaller when zoomed in, larger when zoomed out)
+            if (this.previewPinContainer) {
+                const baseScale = 150;
+                const referenceRadius = 10;  // Reference distance for base scale
+                const pinScale = baseScale * (this.camera.radius / referenceRadius);
+                this.previewPinContainer.scaling.setAll(pinScale);
+            }
+
             // Calculate surface normal (normalize in place to avoid allocation)
             const normal = pickResult.pickedPoint.normalize();
 
@@ -2003,8 +2063,8 @@ class EarthGlobe {
 
             // Orient the pivot so its local Y-axis points along the normal
             // Reuse tempQuaternion to avoid allocating a new quaternion every frame
-            const defaultUp = BABYLON.Vector3.Up();
-            BABYLON.Quaternion.FromUnitVectorsToRef(
+            const defaultUp = Vector3.Up();
+            Quaternion.FromUnitVectorsToRef(
                 defaultUp,
                 normal,
                 this.tempQuaternion
@@ -2040,6 +2100,22 @@ class EarthGlobe {
         }
         // Don't hide the pin when not over the globe - keep it at last position
         // It will only be hidden when exiting placing mode
+    }
+
+    private async toggleInspector(): Promise<void> {
+        // Inspector only available in development builds
+        if (!import.meta.env.DEV) {
+            console.log('Inspector is only available in development mode');
+            return;
+        }
+
+        if (this.scene.debugLayer.isVisible()) {
+            this.scene.debugLayer.hide();
+        } else {
+            this.scene.debugLayer.show({
+                embedMode: true,
+            });
+        }
     }
 
     private toggleWaterShaderControls(): void {
@@ -2139,15 +2215,15 @@ class EarthGlobe {
 
         // Water Colors
         panel.appendChild(createColorPicker('Shallow Water Color', 0.4, 0.8, 0.95, (r, g, b) =>
-            this.waterMaterial!.setVector3('shallowColor', new BABYLON.Vector3(r, g, b))));
+            this.waterMaterial!.setVector3('shallowColor', new Vector3(r, g, b))));
         panel.appendChild(createColorPicker('Water Color', 0.1, 0.35, 0.65, (r, g, b) =>
-            this.waterMaterial!.setVector3('waterColor', new BABYLON.Vector3(r, g, b))));
+            this.waterMaterial!.setVector3('waterColor', new Vector3(r, g, b))));
         panel.appendChild(createColorPicker('Deep Water Color', 0.02, 0.08, 0.25, (r, g, b) =>
-            this.waterMaterial!.setVector3('deepColor', new BABYLON.Vector3(r, g, b))));
+            this.waterMaterial!.setVector3('deepColor', new Vector3(r, g, b))));
         panel.appendChild(createColorPicker('Caustic Color', 1.0, 1.0, 1.0, (r, g, b) =>
-            this.waterMaterial!.setVector3('causticColor', new BABYLON.Vector3(r, g, b))));
+            this.waterMaterial!.setVector3('causticColor', new Vector3(r, g, b))));
         panel.appendChild(createColorPicker('Foam Color', 0.7, 0.95, 1.0, (r, g, b) =>
-            this.waterMaterial!.setVector3('foamColor', new BABYLON.Vector3(r, g, b))));
+            this.waterMaterial!.setVector3('foamColor', new Vector3(r, g, b))));
 
         // Caustics
         const hr0 = document.createElement('hr');

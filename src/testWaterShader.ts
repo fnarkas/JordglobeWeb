@@ -2,37 +2,43 @@
  * Test page entry point for water shader
  */
 
-import * as BABYLON from "@babylonjs/core";
+import { Engine } from '@babylonjs/core/Engines/engine';
+import { Scene } from '@babylonjs/core/scene';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
+import { Vector3, Color4 } from '@babylonjs/core/Maths/math';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import '@babylonjs/core/Meshes/meshBuilder';
 import { createWaterMaterial } from "./waterShader";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
-const engine = new BABYLON.Engine(canvas, true);
+const engine = new Engine(canvas, true);
 
 const createScene = () => {
-  const scene = new BABYLON.Scene(engine);
-  scene.clearColor = new BABYLON.Color4(0.1, 0.1, 0.15, 1);
+  const scene = new Scene(engine);
+  scene.clearColor = new Color4(0.1, 0.1, 0.15, 1);
 
   // Camera
-  const camera = new BABYLON.ArcRotateCamera(
+  const camera = new ArcRotateCamera(
     "camera",
     0,
     Math.PI / 3,
     10,
-    BABYLON.Vector3.Zero(),
+    Vector3.Zero(),
     scene
   );
   camera.attachControl(canvas, true);
 
   // Light
-  const light = new BABYLON.HemisphericLight(
+  const light = new HemisphericLight(
     "light",
-    new BABYLON.Vector3(0, 1, 0),
+    new Vector3(0, 1, 0),
     scene
   );
   light.intensity = 0.7;
 
   // Create sphere with water shader
-  const sphere = BABYLON.MeshBuilder.CreateSphere(
+  const sphere = MeshBuilder.CreateSphere(
     "sphere",
     { diameter: 4, segments: 64 },
     scene

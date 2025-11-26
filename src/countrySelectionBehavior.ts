@@ -7,8 +7,13 @@
  * - On deselection: resets altitude and hides label
  */
 
-import * as BABYLON from '@babylonjs/core';
-import * as GUI from '@babylonjs/gui';
+import { Scene } from '@babylonjs/core/scene';
+import type { Nullable } from '@babylonjs/core/types';
+import type { Observer } from '@babylonjs/core/Misc/observable';
+import { AdvancedDynamicTexture } from '@babylonjs/gui/2D/advancedDynamicTexture';
+import { Control } from '@babylonjs/gui/2D/controls/control';
+import { Rectangle } from '@babylonjs/gui/2D/controls/rectangle';
+import { TextBlock } from '@babylonjs/gui/2D/controls/textBlock';
 import type { CountryPolygon, LatLon } from './countryPicker';
 
 export interface SelectionBehaviorOptions {
@@ -45,26 +50,26 @@ const MAX_ANIMATED = 256;
  * Manages country selection visual behavior
  */
 export class CountrySelectionBehavior {
-    private scene: BABYLON.Scene;
-    private advancedTexture: GUI.AdvancedDynamicTexture;
+    private scene: Scene;
+    private advancedTexture: AdvancedDynamicTexture;
     private options: Required<SelectionBehaviorOptions>;
     private setAltitude: SetAltitudeCallback;
     private getAltitude: GetAltitudeCallback;
 
     private selectedCountry: CountryPolygon | null = null;
-    private countryLabel: GUI.TextBlock | null = null;
-    private labelContainer: GUI.Rectangle | null = null;
+    private countryLabel: TextBlock | null = null;
+    private labelContainer: Rectangle | null = null;
 
     // Animation state - pre-allocated arrays (no garbage per frame)
-    private animationObserver: BABYLON.Nullable<BABYLON.Observer<BABYLON.Scene>> = null;
+    private animationObserver: Nullable<Observer<Scene>> = null;
     private animTargets: Float32Array;    // Target altitude for each country (-1 = no animation)
     private animStartValues: Float32Array; // Start altitude when animation began
     private animStartTimes: Float32Array;  // Start time (ms) for each animation
     private animCount: number = 0;         // Number of active animations
 
     constructor(
-        scene: BABYLON.Scene,
-        advancedTexture: GUI.AdvancedDynamicTexture,
+        scene: Scene,
+        advancedTexture: AdvancedDynamicTexture,
         setAltitude: SetAltitudeCallback,
         getAltitude: GetAltitudeCallback,
         options: SelectionBehaviorOptions = {}
@@ -133,7 +138,7 @@ export class CountrySelectionBehavior {
 
     private createLabel(): void {
         // Create container rectangle for the label
-        const container = new GUI.Rectangle("countryLabelContainer");
+        const container = new Rectangle("countryLabelContainer");
         container.width = "auto";
         container.height = "auto";
         container.adaptWidthToChildren = true;
@@ -146,13 +151,13 @@ export class CountrySelectionBehavior {
         container.paddingRight = "12px";
         container.paddingTop = "8px";
         container.paddingBottom = "8px";
-        container.horizontalAlignment = GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-        container.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        container.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_CENTER;
+        container.verticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
         container.top = "60px";
         container.isVisible = false;
 
         // Create text label
-        const label = new GUI.TextBlock("countryLabel");
+        const label = new TextBlock("countryLabel");
         label.text = "";
         label.color = this.options.labelColor;
         label.fontSize = this.options.labelFontSize;
