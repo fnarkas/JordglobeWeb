@@ -315,6 +315,62 @@ function detectLakes(countries: CountryJSON[]): Map<number, Record<number, numbe
 }
 
 // ============================================================================
+// DUPLICATE POINT REMOVAL
+// ============================================================================
+
+/**
+ * Remove consecutive duplicate points from a path
+ * Returns the cleaned path and count of removed duplicates
+ */
+function removeConsecutiveDuplicates(path: number[][]): { cleaned: number[][], removed: number } {
+    if (path.length < 2) return { cleaned: path, removed: 0 };
+
+    const cleaned: number[][] = [path[0]];
+    let removed = 0;
+
+    for (let i = 1; i < path.length; i++) {
+        const prev = cleaned[cleaned.length - 1];
+        const curr = path[i];
+        if (curr[0] !== prev[0] || curr[1] !== prev[1]) {
+            cleaned.push(curr);
+        } else {
+            removed++;
+        }
+    }
+
+    // Also check if last point equals first point (shouldn't be closed)
+    if (cleaned.length > 1) {
+        const first = cleaned[0];
+        const last = cleaned[cleaned.length - 1];
+        if (first[0] === last[0] && first[1] === last[1]) {
+            cleaned.pop();
+            removed++;
+        }
+    }
+
+    return { cleaned, removed };
+}
+
+/**
+ * Clean all paths in a country, removing consecutive duplicate points
+ */
+function cleanCountryPaths(country: CountryJSON): { paths: string, totalRemoved: number } {
+    const paths = JSON.parse(country.paths) as number[][][];
+    let totalRemoved = 0;
+
+    const cleanedPaths = paths.map(path => {
+        const { cleaned, removed } = removeConsecutiveDuplicates(path);
+        totalRemoved += removed;
+        return cleaned;
+    });
+
+    return {
+        paths: JSON.stringify(cleanedPaths),
+        totalRemoved
+    };
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -330,6 +386,19 @@ async function main() {
         const countries = JSON.parse(fs.readFileSync(inputPath, 'utf-8')) as CountryJSON[];
         const loadEndTime = performance.now();
         console.log(`Loaded ${countries.length} countries in ${(loadEndTime - loadStartTime).toFixed(2)}ms`);
+
+        // Clean duplicate points from paths
+        console.log(`\n=== Cleaning Duplicate Points ===`);
+        let totalDuplicatesRemoved = 0;
+        for (const country of countries) {
+            const { paths, totalRemoved } = cleanCountryPaths(country);
+            if (totalRemoved > 0) {
+                console.log(`  ${country.name_en} (${country.iso2}): removed ${totalRemoved} duplicate point(s)`);
+                country.paths = paths;
+                totalDuplicatesRemoved += totalRemoved;
+            }
+        }
+        console.log(`Total duplicate points removed: ${totalDuplicatesRemoved}`);
 
         // Detect enclaves
         const enclaveMap = detectEnclaves(countries);
@@ -374,6 +443,7 @@ async function main() {
 
         console.log(`\n=== Summary ===`);
         console.log(`Total countries: ${enrichedCountries.length}`);
+        console.log(`Duplicate points removed: ${totalDuplicatesRemoved}`);
         console.log(`Countries with enclave holes: ${countriesWithHoles}`);
         console.log(`Countries with lake holes: ${countriesWithLakes}`);
         console.log(`Output: ${outputPath}`);

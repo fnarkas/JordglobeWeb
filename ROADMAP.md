@@ -1,18 +1,10 @@
 # Roadmap
 
-## Minor Tweaks
-
-- [ ] Why is the Switzerland/Germany border missing?
-
 ## Upcoming Features
 
-- [ ] Add collision detection of pin and countries in 2D space using accelerated data structures for polygon data
-- [ ] Create a callback for when a country is selected
-- [ ] Country selection behavior (in separate file, using callback API):
-  - Increase selected country's altitude
-  - Show country name label
-  - On deselection: reset altitude and hide label
+- [ ] Pin should scale down according to current camera zoom
 - [ ] Treeshaking of Babylon.js to make build smaller
+- [ ] Right mouse button on globe enters placing mode, release exits
 
 ## Completed
 
@@ -20,3 +12,8 @@
 - [x] Removed mergedTubeBorders (and all tube border code, borderData loading)
 - [x] Paths within paths are lakes - cutouts in geometry (similar to enclave handling)
 - [x] Fix mesh generation of Russia (using CDT triangulation with Steiner points)
+- [x] Fix missing Switzerland/Germany border (reduced MIN_SEGMENT_LENGTH from 3 to 2, increased EPSILON from 0.0001 to 0.002 for data inconsistencies)
+- [x] Add collision detection of pin and countries in 2D space using grid-based spatial index (CountryPicker)
+- [x] Create a callback for when a country is selected (setCountrySelectedCallback API)
+- [x] Country selection behavior: Show country name label on selection (CountrySelectionBehavior)
+- [x] Country selection behavior: Animate altitude increase on selection

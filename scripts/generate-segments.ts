@@ -313,7 +313,7 @@ function findSharedSegments2D(countries: Country2D[]): Segment2D[] {
 
 // Main
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
-const inputFile = path.join(__dirname, '../public/countries.json');
+const inputFile = path.join(__dirname, '../public/countries-enriched.json');
 const outputFile = path.join(__dirname, '../public/segments.json');
 
 console.log('Border Segment Generator');
@@ -321,8 +321,8 @@ console.log('========================\n');
 console.log(`Input:  ${inputFile}`);
 console.log(`Output: ${outputFile}`);
 
-// Load countries
-console.log('\nLoading countries.json...');
+// Load countries (using enriched data which has duplicate points removed)
+console.log('\nLoading countries-enriched.json...');
 const countries = loadCountries2D(inputFile);
 console.log(`Loaded ${countries.length} countries`);
 
