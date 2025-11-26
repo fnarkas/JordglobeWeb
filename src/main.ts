@@ -26,7 +26,7 @@ const BORDER_LINE_ALTITUDE = 0.09;
 const EXTRUDED_BORDER_DEPTH = 0.05;
 
 // Animation constants
-const ANIMATION_AMPLITUDE = 0.08;
+const ANIMATION_AMPLITUDE = 0.2;
 
 // Border rendering constants
 const TUBE_RADIUS = 0.002;
@@ -86,6 +86,7 @@ class EarthGlobe {
     private animationTexture: BABYLON.DynamicTexture | null;  // Texture storing animation values per country
     private animationData: Float32Array;  // Animation values for each country
     private showCountries: boolean;
+    private animationEnabled: boolean;  // Toggle for country animation (A key)
     private frameCount: number;
     private sceneInstrumentation: BABYLON.SceneInstrumentation;
     private bossPinTemplate: BABYLON.AbstractMesh | null;
@@ -127,6 +128,7 @@ class EarthGlobe {
         this.animationTexture = null;
         this.animationData = new Float32Array(1024);  // Countries + segments (1024 max)
         this.showCountries = false;
+        this.animationEnabled = false;
         this.frameCount = 0;
         this.bossPinTemplate = null;
         this.placedPins = [];
@@ -237,6 +239,11 @@ class EarthGlobe {
             // Toggle water shader controls (W key)
             if (e.key === 'w' || e.key === 'W') {
                 this.toggleWaterShaderControls();
+            }
+            // Toggle country animation (A key)
+            if (e.key === 'a' || e.key === 'A') {
+                this.animationEnabled = !this.animationEnabled;
+                console.log(`Animation ${this.animationEnabled ? 'enabled' : 'disabled'}`);
             }
         });
 
@@ -373,6 +380,7 @@ class EarthGlobe {
         this.animationTexture = null;
         this.animationData = new Float32Array(1024);  // Countries + segments (1024 max)
         this.showCountries = false;
+        this.animationEnabled = false;
         this.frameCount = 0;
         this.bossPinTemplate = null;
         this.placedPins = [];
@@ -1491,7 +1499,20 @@ class EarthGlobe {
         }
     }
 
+    private animationWasEnabled: boolean = false;  // Track previous state to avoid redundant texture updates
+
     private updateAnimation(): void {
+        if (!this.animationEnabled) {
+            // Only update texture once when transitioning to disabled
+            if (this.animationWasEnabled) {
+                this.animationData.fill(0);
+                this.updateAnimationTexture();
+                this.animationWasEnabled = false;
+            }
+            return;
+        }
+
+        this.animationWasEnabled = true;
         const time = Date.now() * 0.001;  // Time in seconds
 
         // Animate all countries with unique sine wave patterns
@@ -1518,12 +1539,6 @@ class EarthGlobe {
         this.frameCount++;
         this.updateStats();
         this.updateAnimation();
-
-        // Debug logging every 60 frames
-        if (this.frameCount % 60 === 0) {
-            console.log(`Frame ${this.frameCount}: animationData[0]=${this.animationData[0].toFixed(3)}, animationData[5]=${this.animationData[5].toFixed(3)}, animationData[10]=${this.animationData[10].toFixed(3)}, animationData[20]=${this.animationData[20].toFixed(3)}`);
-            console.log(`Total meshes in scene: ${this.scene.meshes.length}, Active meshes: ${this.scene.getActiveMeshes().length}`);
-        }
     }
 
     private async loadBossPinModel(): Promise<void> {
