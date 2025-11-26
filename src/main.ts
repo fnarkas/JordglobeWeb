@@ -4,7 +4,6 @@ import '@babylonjs/loaders/glTF';
 import '@babylonjs/inspector';
 import * as GUI from '@babylonjs/gui';
 import earcut from 'earcut';
-import { loadBorderData, type BorderData } from './borderLoaderWasm';
 import { loadSegments, getSharedSegments, type SegmentData, type Segment3D } from './segmentLoader';
 import { createWaterMaterial } from './waterShader';
 
@@ -22,7 +21,6 @@ const MAX_ANIMATION_COUNTRIES = 256;
 
 // Altitude constants
 const COUNTRY_ALTITUDE = 0.08;
-const BORDER_LINE_ALTITUDE = 0.09;
 const EXTRUDED_BORDER_DEPTH = 0.05;
 
 // Animation constants
@@ -45,7 +43,6 @@ interface LatLonPoint {
 
 interface PolygonData {
     mesh: BABYLON.Mesh;
-    borderLine: BABYLON.Mesh | null;
     extrudedBorder: BABYLON.Mesh | null;
     borderPoints: LatLonPoint[];
     countryIndex: number;  // Back-reference to parent country
@@ -81,7 +78,6 @@ class EarthGlobe {
     private polygonsData: PolygonData[];  // Flat array of all polygons
     private countriesData: CountryData[];  // Country-level metadata
     private mergedCountries: BABYLON.Mesh | null;  // Single merged mesh for all country polygons
-    private mergedTubeBorders: BABYLON.Mesh | null;  // Single merged mesh for all tube borders
     private mergedExtrudedBorders: BABYLON.Mesh | null;  // Single merged mesh for all extruded borders
     private animationTexture: BABYLON.DynamicTexture | null;  // Texture storing animation values per country
     private animationData: Float32Array;  // Animation values for each country
@@ -99,7 +95,6 @@ class EarthGlobe {
     private loadingProgress: HTMLElement | null;
     private loadingText: HTMLElement | null;
     private loadingScreen: HTMLElement | null;
-    private borderData: BorderData | null;
     private segmentData: SegmentData | null;
     private mergedSegmentBorders: BABYLON.Mesh | null;  // Merged mesh for segment borders
     private segmentAnimationIndices: Map<number, number[]>;  // Map from segment index to array of country indices
@@ -123,7 +118,6 @@ class EarthGlobe {
         this.polygonsData = [];
         this.countriesData = [];
         this.mergedCountries = null;
-        this.mergedTubeBorders = null;
         this.mergedExtrudedBorders = null;
         this.animationTexture = null;
         this.animationData = new Float32Array(1024);  // Countries + segments (1024 max)
@@ -140,7 +134,6 @@ class EarthGlobe {
         this.loadingProgress = document.getElementById('loadingProgress');
         this.loadingText = document.getElementById('loadingText');
         this.loadingScreen = document.getElementById('loadingScreen');
-        this.borderData = null;
         this.segmentData = null;
         this.mergedSegmentBorders = null;
         this.segmentAnimationIndices = new Map();
@@ -315,10 +308,6 @@ class EarthGlobe {
             this.mergedCountries.dispose(false, true);
             this.mergedCountries = null;
         }
-        if (this.mergedTubeBorders) {
-            this.mergedTubeBorders.dispose(false, true);
-            this.mergedTubeBorders = null;
-        }
         if (this.mergedExtrudedBorders) {
             this.mergedExtrudedBorders.dispose(false, true);
             this.mergedExtrudedBorders = null;
@@ -375,7 +364,6 @@ class EarthGlobe {
         this.polygonsData = [];
         this.countriesData = [];
         this.mergedCountries = null;
-        this.mergedTubeBorders = null;
         this.mergedExtrudedBorders = null;
         this.animationTexture = null;
         this.animationData = new Float32Array(1024);  // Countries + segments (1024 max)
@@ -562,73 +550,6 @@ class EarthGlobe {
         return new BABYLON.Color3(r, g, b);
     }
 
-    private createCountryBorderLines(latLonPoints: LatLonPoint[], altitude: number = BORDER_LINE_ALTITUDE, countryIndex: number = 0): BABYLON.Mesh | null {
-        try {
-            // Convert lat/lon points to 3D sphere coordinates
-            const points3D: BABYLON.Vector3[] = [];
-
-            for (const point of latLonPoints) {
-                const vertex = this.latLonToSphere(point.lat, point.lon, altitude);
-                points3D.push(vertex);
-            }
-
-            // Close the loop by adding the first point at the end
-            if (points3D.length > 0) {
-                points3D.push(points3D[0]);
-            }
-
-            // Create tube along the path for visible thickness
-            const tube = BABYLON.MeshBuilder.CreateTube(
-                "borderLine",
-                {
-                    path: points3D,
-                    radius: TUBE_RADIUS,
-                    tessellation: TUBE_TESSELLATION,
-                    cap: BABYLON.Mesh.CAP_ALL
-                },
-                this.scene
-            );
-
-            // Create unlit white material for the border (not affected by light)
-            const material = new BABYLON.StandardMaterial("borderMat", this.scene);
-            material.emissiveColor = new BABYLON.Color3(1, 1, 1);
-            material.disableLighting = true;
-            tube.material = material;
-
-            return tube;
-        } catch (error) {
-            console.error("Error creating border lines:", error);
-            return null;
-        }
-    }
-
-    private createBorderTubeFromPath(points3D: BABYLON.Vector3[], countryIndex: number = 0): BABYLON.Mesh | null {
-        try {
-            // Create tube along the pre-computed path
-            const tube = BABYLON.MeshBuilder.CreateTube(
-                "borderLine",
-                {
-                    path: points3D,
-                    radius: TUBE_RADIUS,
-                    tessellation: TUBE_TESSELLATION,
-                    cap: BABYLON.Mesh.CAP_ALL
-                },
-                this.scene
-            );
-
-            // Create unlit white material for the border (not affected by light)
-            const material = new BABYLON.StandardMaterial("borderMat", this.scene);
-            material.emissiveColor = new BABYLON.Color3(1, 1, 1);
-            material.disableLighting = true;
-            tube.material = material;
-
-            return tube;
-        } catch (error) {
-            console.error("Error creating border tube from path:", error);
-            return null;
-        }
-    }
-
     private createExtrudedBorder(latLonPoints: LatLonPoint[], altitude: number = COUNTRY_ALTITUDE, countryIndex: number = 0, isHole: boolean = false): BABYLON.Mesh | null {
         try {
             // Convert lat/lon points to 3D sphere coordinates (top edge of border)
@@ -740,7 +661,7 @@ class EarthGlobe {
         }
     }
 
-    private addPolygon(coordinates: number[], countryIndex: number, borderPath?: BABYLON.Vector3[], holePolygons?: number[][][]): number | null {
+    private addPolygon(coordinates: number[], countryIndex: number, holePolygons?: number[][][]): number | null {
         if (this.polygonsData.length >= MAX_COUNTRIES) {
             console.error("Max polygons reached");
             return null;
@@ -774,19 +695,6 @@ class EarthGlobe {
 
         if (mesh) {
             this.showCountries = true;
-
-            // Create border lines (tubes) for this polygon
-            let borderLine: BABYLON.Mesh | null = null;
-            if (borderPath && borderPath.length >= 2) {
-                // Use pre-baked border path
-                borderLine = this.createBorderTubeFromPath(borderPath, countryIndex);
-            } else {
-                // Fallback to computing border path (old method)
-                if (borderPath && borderPath.length < 2) {
-                    console.warn(`⚠️ Pre-baked border has insufficient points (${borderPath.length}), falling back to computation`);
-                }
-                borderLine = this.createCountryBorderLines(latLonPoints, BORDER_LINE_ALTITUDE, countryIndex);
-            }
 
             // Create extruded border walls for this polygon (outer border)
             const extrudedBorder = this.createExtrudedBorder(latLonPoints, COUNTRY_ALTITUDE, countryIndex, false);
@@ -831,7 +739,6 @@ class EarthGlobe {
             // Store polygon data
             const polygonData: PolygonData = {
                 mesh: mesh,
-                borderLine: borderLine,
                 extrudedBorder: finalExtrudedBorder,
                 borderPoints: latLonPoints,
                 countryIndex: countryIndex
@@ -848,13 +755,8 @@ class EarthGlobe {
 
     private async loadCountries(): Promise<void> {
         try {
-            // Load binary border data and segments in parallel
-            const [borderData, segmentData] = await Promise.all([
-                loadBorderData('borders.bin'),
-                loadSegments('segments.json')
-            ]);
-            this.borderData = borderData;
-            this.segmentData = segmentData;
+            // Load segments data
+            this.segmentData = await loadSegments('segments.json');
 
             const response = await fetch('countries-with-holes.json');
             const countries = await response.json() as CountryJSON[];
@@ -884,9 +786,6 @@ class EarthGlobe {
                     const paths = JSON.parse(country.paths) as number[][][];
                     const polygonIndices: number[] = [];
 
-                    // Get the pre-baked borders for this country
-                    const countryBorders = this.borderData.countries[addedCount];
-
                     // Process all polygons (including islands) for this country
                     for (let polyIdx = 0; polyIdx < paths.length; polyIdx++) {
                         const polygon = paths[polyIdx];
@@ -915,7 +814,7 @@ class EarthGlobe {
                         if (flatCoords.length < 6) continue; // Need at least 3 points
 
                         // Get holes for this polygon (if any)
-                        const holePolygons: number[][] = [];
+                        const holePolygons: number[][][] = [];
                         if (country.holes && country.holes[polyIdx] && country.holes[polyIdx].length > 0) {
                             console.log(`  ${country.name_en} polygon ${polyIdx} has holes:`, country.holes[polyIdx]);
 
@@ -932,14 +831,8 @@ class EarthGlobe {
                             }
                         }
 
-                        // Get the corresponding border path from binary data
-                        const borderPathIndex = polygonIndices.length; // Index within this country's polygons
-                        const borderPath = countryBorders && borderPathIndex < countryBorders.borders.length
-                            ? countryBorders.borders[borderPathIndex].points
-                            : undefined;
-
-                        // Add this polygon with reference to the country, pre-baked border, and holes
-                        const polygonIndex = this.addPolygon(flatCoords, this.countriesData.length, borderPath, holePolygons);
+                        // Add this polygon with reference to the country and holes
+                        const polygonIndex = this.addPolygon(flatCoords, this.countriesData.length, holePolygons);
                         if (polygonIndex !== null) {
                             polygonIndices.push(polygonIndex);
                         }
@@ -966,20 +859,11 @@ class EarthGlobe {
 
             console.log('Added', addedCount, 'countries with', this.polygonsData.length, 'total polygons');
 
-            // Log border loading statistics
-            if (this.borderData) {
-                const usedBorders = this.polygonsData.filter(p => p.borderLine !== null).length;
-                console.log(`✓ Using pre-baked borders: ${usedBorders}/${this.polygonsData.length} polygons (${this.borderData.totalBorders} total borders in file)`);
-            } else {
-                console.warn('⚠️ No binary border data loaded - computed all borders from scratch');
-            }
-
             // Create animation texture before merging
             this.createAnimationTexture();
 
             // Merge all meshes for performance
             this.mergeCountryPolygons();
-            this.mergeTubeBorders();
             this.mergeExtrudedBorders();
 
             // Render segment borders (international borders only)
@@ -1328,15 +1212,6 @@ class EarthGlobe {
         console.log(`Merged ${meshes.length} ${meshName} in ${(endTime - startTime).toFixed(2)}ms`);
 
         return mergedMesh;
-    }
-
-    private mergeTubeBorders(): void {
-        this.mergedTubeBorders = this.mergeMeshesWithAnimation(
-            (p) => p.borderLine,
-            "mergedTubeBorders",
-            () => this.createBorderShaderMaterial("tubeBorderShader", BORDER_COLOR_WHITE),
-            (p) => p.borderLine = null
-        );
     }
 
     private mergeExtrudedBorders(): void {
