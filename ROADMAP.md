@@ -2,7 +2,7 @@
 
 ## Minor Tweaks
 
-- [ ] Fix mesh generation of Russia (currently broken)
+- [ ] Why is the Switzerland/Germany border missing?
 
 ## Upcoming Features
 
@@ -12,9 +12,11 @@
   - Increase selected country's altitude
   - Show country name label
   - On deselection: reset altitude and hide label
+- [ ] Treeshaking of Babylon.js to make build smaller
 
 ## Completed
 
 - [x] Country animation now off by default, toggleable with 'A' key
 - [x] Removed mergedTubeBorders (and all tube border code, borderData loading)
 - [x] Paths within paths are lakes - cutouts in geometry (similar to enclave handling)
+- [x] Fix mesh generation of Russia (using CDT triangulation with Steiner points)
