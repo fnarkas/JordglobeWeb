@@ -1590,6 +1590,16 @@ class EarthGlobe {
                     this.scene
                 );
 
+                // Fix UV coordinates for animation: set uv.y = 1.0 for all vertices
+                // This makes the entire tube animate uniformly (like the top of extruded borders)
+                const uvs = tube.getVerticesData(VertexBuffer.UVKind);
+                if (uvs) {
+                    for (let i = 1; i < uvs.length; i += 2) {
+                        uvs[i] = 1.0;  // Set all uv.y values to 1.0
+                    }
+                    tube.setVerticesData(VertexBuffer.UVKind, uvs);
+                }
+
                 segmentTubes.push(tube);
                 vertexCounts.push(tube.getTotalVertices());
 
