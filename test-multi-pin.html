@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Pin Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        button {
+            margin: 5px 0;
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            width: 200px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.clear {
+            background: #f44336;
+        }
+        button.clear:hover {
+            background: #da190b;
+        }
+        #info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+
+    <div id="controls">
+        <h3>Multi-Pin Test</h3>
+        <button id="add4Players">Add 4 Players</button>
+        <button id="add8Players">Add 8 Players</button>
+        <button id="updatePositions">Update Positions</button>
+        <button id="clearPins" class="clear">Clear All Pins</button>
+        <div id="info">
+            <div>Pins: <span id="pinCount">0</span></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { EarthGlobe } from './src/earthGlobe';
+        import { MultiPinManager } from './src/multiPinManager';
+        import { getPlayerColor } from './shared/playerColors';
+
+        const canvas = document.getElementById('renderCanvas');
+
+        // Create EarthGlobe instance (reusing the actual globe from index.html!)
+        const earthGlobe = new EarthGlobe('renderCanvas');
+
+        // Wait for globe to fully load (it initializes in constructor but loads countries async)
+        // We'll access it via the window object after a short delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Get the scene and camera from the globe
+        const scene = earthGlobe.getScene();
+        const camera = earthGlobe.getCamera();
+        const earthSphere = earthGlobe.getEarthSphere();
+
+        // Initialize MultiPinManager with real globe components
+        const multiPinManager = new MultiPinManager(
+            scene,
+            camera,
+            (material) => earthGlobe.createUnlitMaterial(material)
+        );
+        await multiPinManager.init();
+
+        // Test locations (famous cities)
+        const testLocations = [
+            { name: 'Paris', lat: 48.8584, lon: 2.2945 },
+            { name: 'London', lat: 51.5074, lon: -0.1278 },
+            { name: 'New York', lat: 40.7128, lon: -74.0060 },
+            { name: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+            { name: 'Sydney', lat: -33.8688, lon: 151.2093 },
+            { name: 'Rio', lat: -22.9068, lon: -43.1729 },
+            { name: 'Cairo', lat: 30.0444, lon: 31.2357 },
+            { name: 'Mumbai', lat: 19.0760, lon: 72.8777 }
+        ];
+
+        function updatePinCount() {
+            document.getElementById('pinCount').textContent = multiPinManager.getPins().size;
+        }
+
+        // Add 4 players
+        document.getElementById('add4Players').addEventListener('click', () => {
+            multiPinManager.clearAllPins();
+            for (let i = 0; i < 4; i++) {
+                const location = testLocations[i];
+                const color = getPlayerColor(i);
+                multiPinManager.addPin(
+                    `player${i}`,
+                    location.name,
+                    color,
+                    location.lat,
+                    location.lon
+                );
+            }
+            updatePinCount();
+            console.log('Added 4 players');
+        });
+
+        // Add 8 players
+        document.getElementById('add8Players').addEventListener('click', () => {
+            multiPinManager.clearAllPins();
+            for (let i = 0; i < 8; i++) {
+                const location = testLocations[i];
+                const color = getPlayerColor(i);
+                multiPinManager.addPin(
+                    `player${i}`,
+                    location.name,
+                    color,
+                    location.lat,
+                    location.lon
+                );
+            }
+            updatePinCount();
+            console.log('Added 8 players');
+        });
+
+        // Update positions (move to random nearby locations)
+        document.getElementById('updatePositions').addEventListener('click', () => {
+            const pins = multiPinManager.getPins();
+            pins.forEach((pin, playerId) => {
+                const randomOffset = () => (Math.random() - 0.5) * 20; // ±10 degrees
+                const newLat = Math.max(-90, Math.min(90, pin.position.lat + randomOffset()));
+                const newLon = ((pin.position.lon + randomOffset() + 180) % 360) - 180;
+
+                multiPinManager.updatePin(playerId, newLat, newLon);
+            });
+            console.log('Updated pin positions');
+        });
+
+        // Clear all pins
+        document.getElementById('clearPins').addEventListener('click', () => {
+            multiPinManager.clearAllPins();
+            updatePinCount();
+            console.log('Cleared all pins');
+        });
+
+        // Note: The render loop is already set up by EarthGlobe
+        // We just need to update pin scales in the existing render loop
+        scene.onBeforeRenderObservable.add(() => {
+            multiPinManager.updatePinScales();
+        });
+
+        console.log('Multi-Pin Test initialized');
+        console.log('Click buttons to test pin management');
+    </script>
+</body>
+</html>
