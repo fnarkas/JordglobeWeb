@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/log-server.mjs & node --watch server/index.mjs & vite --host",
-    "server": "node --watch server/index.mjs",
+    "frontend": "vite --host",
+    "game-server": "node --watch server/index.mjs",
     "log-server": "node scripts/log-server.mjs",
+    "server": "node --watch server/index.mjs",
+    "start": "node server/production.mjs",
     "build": "tsc && vite build",
+    "build:production": "npm run build",
     "preview": "vite preview",
     "test": "node test_neighbors_new.cjs",
     "test:segments": "tsx scripts/test-segment-loader.ts",
@@ -27,6 +31,7 @@
     "@babylonjs/core": "^7.0.0",
     "@babylonjs/gui": "^7.54.3",
     "@babylonjs/loaders": "^7.54.3",
+    "express": "^4.18.2",
     "qrcode": "^1.5.4",
     "ws": "^8.18.3"
   }

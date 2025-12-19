@@ -6,6 +6,7 @@ import QRCode from 'qrcode';
 import { EarthGlobe } from '../earthGlobe';
 import { RevealVisualizer } from './revealVisualizer';
 import { Confetti } from '../confetti';
+import { config } from '../config';
 
 interface Player {
     name: string;
@@ -28,25 +29,23 @@ class HostLobby {
         this.connectToServer();
     }
 
-    private async generateQRCode(localIP: string, webPort: number): Promise<void> {
-        const partyUrl = `http://${localIP}:${webPort}/party`;
-
+    private async generateQRCode(joinUrl: string): Promise<void> {
         const urlElement = document.getElementById('joinUrl');
         if (urlElement) {
-            urlElement.textContent = partyUrl;
+            urlElement.textContent = joinUrl;
         }
 
         const qrContainer = document.getElementById('qrCode');
         if (qrContainer) {
             qrContainer.innerHTML = '';
             try {
-                const canvas = await QRCode.toCanvas(partyUrl, {
+                const canvas = await QRCode.toCanvas(joinUrl, {
                     width: 250,
                     margin: 0,
                     color: { dark: '#1a1a2e', light: '#ffffff' }
                 });
                 qrContainer.appendChild(canvas);
-                console.log('QR code generated for:', partyUrl);
+                console.log('QR code generated for:', joinUrl);
             } catch (err) {
                 console.error('Failed to generate QR code:', err);
             }
@@ -54,15 +53,19 @@ class HostLobby {
     }
 
     private connectToServer(): void {
-        const host = window.location.hostname || 'localhost';
-        const serverUrl = `ws://${host}:3003`;
+        const serverUrl = config.websocketUrl;
 
         console.log('Connecting to server:', serverUrl);
         this.ws = new WebSocket(serverUrl);
 
         this.ws.onopen = () => {
             console.log('Connected to server');
-            this.ws?.send(JSON.stringify({ type: 'host-connect' }));
+            // Send hostname so server can generate correct join URL
+            const hostname = window.location.hostname;
+            this.ws?.send(JSON.stringify({
+                type: 'host-connect',
+                host: hostname
+            }));
         };
 
         this.ws.onmessage = (event) => {
@@ -72,7 +75,20 @@ class HostLobby {
 
                 switch (message.type) {
                     case 'host-info':
-                        this.generateQRCode(message.localIP, message.webPort);
+                        // Handle both old format (dev server) and new format (production server)
+                        let joinUrl: string;
+                        if (message.joinUrl) {
+                            // New format (production server)
+                            joinUrl = message.joinUrl;
+                        } else if (message.localIP && message.webPort) {
+                            // Old format (dev server) - for backward compatibility
+                            joinUrl = `http://${message.localIP}:${message.webPort}/party`;
+                        } else {
+                            console.error('Invalid host-info message - missing joinUrl or localIP/webPort');
+                            break;
+                        }
+
+                        this.generateQRCode(joinUrl);
                         this.players = message.players;
                         this.updateLobbyPlayerList();
                         this.updateWaitingMessage();

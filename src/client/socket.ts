@@ -5,6 +5,7 @@
  */
 
 import { Player } from './WaitingScreen';
+import { config } from '../config';
 
 type MessageHandler = {
     'joined': (data: { name: string; isFirst: boolean; players: Player[] }) => void;
@@ -22,9 +23,10 @@ export class GameSocket {
     private serverUrl: string;
 
     constructor(serverUrl?: string) {
-        // Use same host as the page, but port 3003
-        const host = window.location.hostname || 'localhost';
-        this.serverUrl = serverUrl || `ws://${host}:3003`;
+        // Use config for environment-aware WebSocket URL
+        // In dev: ws://localhost:3003
+        // In prod: wss://your-app.run.app
+        this.serverUrl = serverUrl || config.websocketUrl;
     }
 
     connect(): Promise<void> {
