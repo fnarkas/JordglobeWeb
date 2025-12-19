@@ -94,7 +94,7 @@ class HostLobby {
                         break;
 
                     case 'reveal':
-                        this.showResults(message.correct, message.results);
+                        this.showResults(message.correct, message.results, message.players);
                         break;
                 }
             } catch (err) {
