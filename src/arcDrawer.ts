@@ -11,6 +11,7 @@ import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { EarthGlobe } from './earthGlobe';
 
 const EARTH_RADIUS = 2.0;
 const ARC_SEGMENTS = 64; // Number of points per arc (more = smoother)
@@ -34,11 +35,13 @@ interface Arc {
 
 export class ArcDrawer {
     private scene: Scene;
+    private globe: EarthGlobe;
     private arcs: Map<string, Arc> = new Map();
     private arcIdCounter: number = 0;
 
-    constructor(scene: Scene) {
+    constructor(scene: Scene, globe: EarthGlobe) {
         this.scene = scene;
+        this.globe = globe;
     }
 
     /**
@@ -207,6 +210,10 @@ export class ArcDrawer {
     ): Vector3[] {
         const points: Vector3[] = [];
 
+        // Get surface altitude at start and end points (land vs ocean)
+        const startSurfaceAltitude = this.globe.getAltitudeAtLatLon(startLat, startLon);
+        const endSurfaceAltitude = this.globe.getAltitudeAtLatLon(endLat, endLon);
+
         // Convert to radians
         const lat1 = startLat * (Math.PI / 180);
         const lon1 = startLon * (Math.PI / 180);
@@ -248,13 +255,19 @@ export class ArcDrawer {
             // Normalize to unit sphere
             point.normalize();
 
-            // Calculate altitude using parabolic curve (peaks at t=0.5)
+            // Interpolate base altitude between start and end surface
+            const baseAltitude = startSurfaceAltitude * (1 - t) + endSurfaceAltitude * t;
+
+            // Calculate arc altitude using parabolic curve (peaks at t=0.5)
             // altitude = maxAltitude * 4 * t * (1 - t)
             // This gives 0 at t=0, maxAltitude at t=0.5, 0 at t=1
-            const altitude = maxAltitude * 4 * t * (1 - t);
+            const arcAltitude = maxAltitude * 4 * t * (1 - t);
+
+            // Total altitude = base surface + arc above it
+            const totalAltitude = baseAltitude + arcAltitude;
 
             // Scale to globe radius plus altitude
-            const radius = EARTH_RADIUS + altitude;
+            const radius = EARTH_RADIUS + totalAltitude;
             point.scaleInPlace(radius);
 
             points.push(point);

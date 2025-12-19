@@ -165,15 +165,89 @@ try {
 
 **Default to CLI testing** unless visual/interactive verification is required. This creates a faster, more reliable development workflow for both Claude and the developer.
 
-## Development Server
+## Development Server Architecture
+
+### IMPORTANT: Server Management Rules
+
+**CRITICAL: Claude must NEVER start, stop, or restart servers!**
+
+The user manages all servers manually. Claude should only:
+- ✅ Read log files to diagnose issues
+- ✅ Advise when a server restart is needed
+- ✅ Suggest configuration changes
+- ❌ NEVER run commands to start/stop/restart servers
+- ❌ NEVER kill processes or manage ports
+
+### Fixed Port Assignments
+
+**These ports are FIXED - do NOT change them:**
+
+| Server | Port | Started By | Purpose |
+|--------|------|-----------|---------|
+| Vite Dev Server | **3000** | `npm run dev` | Web app hosting |
+| WebSocket Game Server | **3003** | `npm run dev` | Multiplayer coordination |
+| Browser Console Logger | **9999** | `npm run log-server` (optional) | Browser debugging |
+
+### Current Running Servers
+
+When you run `npm run dev`, TWO servers start automatically:
+
+1. **Vite Dev Server** - http://localhost:3000
+   - Serves the web application
+   - Hot Module Reloading (HMR) - auto-reloads on file changes
+   - Serves: `/party.html` (players), `/host.html` (leaderboard), `/bot-panel.html` (testing)
+
+2. **WebSocket Game Server** - ws://localhost:3003
+   - Manages multiplayer game state
+   - Coordinates players, questions, answers, scoring
+   - Server file: `server/index.mjs`
+   - **Logging**: Writes to `game-server.log` + stdout
+
+3. **Browser Console Log Server** - ws://localhost:9999 (OPTIONAL)
+   - NOT started by `npm run dev` - must run separately with `npm run log-server`
+   - Captures browser console output via WebSocket
+   - Writes to `browser-console.log` for Claude to read
+   - Server file: `scripts/log-server.mjs`
+   - **Only start this when debugging browser-side issues**
+
+### Server Logging Summary
+
+| Server | Port | Log Location | How to View |
+|--------|------|--------------|-------------|
+| Vite | 3000 | stdout | Terminal where `npm run dev` runs |
+| WebSocket Game | 3003 | **`game-server.log`** + stdout | `tail -f game-server.log` |
+| Browser Console | 9999 | `browser-console.log` | `tail -f browser-console.log` |
+
+**Key Points:**
+- **Game Server** now logs to BOTH file and console - easier debugging!
+- **Browser Console Logger** is OPTIONAL (not started by default)
+- Game server log includes detailed message flow with timestamps
+
+**Debugging the Game Server:**
+```bash
+# Watch game server logs in real-time
+tail -f game-server.log
+
+# Search for specific events
+grep "next-round" game-server.log
+grep "Bot Alice" game-server.log
+```
 
 ### Always Running
 
-A development server is **always running** in the background via `npm run dev`:
+The development servers are **always running** in the background via `npm run dev`:
 
-- **Server URL**: `http://localhost:3002/` (or next available port if occupied)
-- **Hot Module Reloading**: Vite automatically reloads the page when files change
-- **No manual restarts needed**: File changes are reflected immediately in the browser
+- **Web Server URL**: `http://localhost:3000/`
+- **WebSocket Server**: `ws://localhost:3003/`
+- **Hot Module Reloading**:
+  - Vite HMR: Browser code reloads automatically
+  - Node `--watch`: Server code restarts automatically
+- **No manual restarts needed**: File changes trigger automatic reloads
+
+**Auto-Restart Behavior:**
+- Browser code changes (`/src`, `/public`) → Vite HMR (instant, no page reload)
+- Server code changes (`server/index.mjs`) → Node restarts (disconnects WebSocket clients temporarily)
+- Log server changes (`scripts/log-server.mjs`) → Manual restart needed (not watched)
 
 ### Claude's Access to Server Output
 
@@ -192,7 +266,7 @@ This allows Claude to:
 
 ### Testing Workflow
 
-**Important**: Claude should **NOT** attempt to open the browser using `open http://localhost:3002/`.
+**Important**: Claude should **NOT** attempt to open the browser using `open http://localhost:3000/`.
 
 **Correct workflow:**
 1. Claude makes code changes

@@ -4,8 +4,8 @@
   "description": "Babylon.js Earth Globe with country borders",
   "type": "module",
   "scripts": {
-    "dev": "node server/index.mjs & vite --host",
-    "server": "node server/index.mjs",
+    "dev": "node --watch server/index.mjs & vite --host",
+    "server": "node --watch server/index.mjs",
     "log-server": "node scripts/log-server.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",

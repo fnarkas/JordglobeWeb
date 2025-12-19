@@ -14,7 +14,7 @@ const globe = new EarthGlobe('renderCanvas');
 // Wait for globe to initialize, then set up arc drawer
 setTimeout(() => {
     const scene = globe.getScene();
-    const arcDrawer = new ArcDrawer(scene);
+    const arcDrawer = new ArcDrawer(scene, globe);
     (window as any).arcDrawer = arcDrawer;
 
     // Test locations

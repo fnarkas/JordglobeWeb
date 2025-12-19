@@ -75,10 +75,10 @@ export class CountryPicker {
     }
 
     /**
-     * Find which country contains the given point
+     * Get which country contains the given point
      * @returns The country polygon containing the point, or null if over ocean/no country
      */
-    pickCountry(point: LatLon): CountryPolygon | null {
+    getCountryAt(point: LatLon): CountryPolygon | null {
         // Find which grid cell this point is in
         const cellX = Math.floor(point.lon / this.cellSize);
         const cellY = Math.floor(point.lat / this.cellSize);

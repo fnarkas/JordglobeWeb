@@ -105,7 +105,7 @@ export class PinManager {
         if (placePin && this.previewPin) {
             const pinPos = this.previewPin.position;
             const latLon = cartesianToLatLon(pinPos.x, pinPos.y, pinPos.z);
-            const country = this.countryPicker.pickCountry(latLon);
+            const country = this.countryPicker.getCountryAt(latLon);
 
             if (country) {
                 console.log(`Pin placed in ${country.name} (${country.iso2})`);
@@ -250,7 +250,7 @@ export class PinManager {
 
             // Detect which country the pin is over
             const latLon = cartesianToLatLon(normal.x, normal.y, normal.z);
-            const country = this.countryPicker.pickCountry(latLon);
+            const country = this.countryPicker.getCountryAt(latLon);
 
             // Update hovered country and trigger callback if changed
             if (country !== this.hoveredCountry) {

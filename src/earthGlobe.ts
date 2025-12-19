@@ -306,7 +306,18 @@ export class EarthGlobe {
      * @returns The country at that location, or null if over ocean
      */
     public getCountryAtLatLon(lat: number, lon: number): CountryPolygon | null {
-        return this.countryPicker.pickCountry({ lat, lon });
+        return this.countryPicker.getCountryAt({ lat, lon });
+    }
+
+    /**
+     * Get the surface altitude at the given lat/lon coordinates
+     * @param lat Latitude in degrees
+     * @param lon Longitude in degrees
+     * @returns Altitude above base sphere (COUNTRY_ALTITUDE if over land, 0 if over ocean)
+     */
+    public getAltitudeAtLatLon(lat: number, lon: number): number {
+        const country = this.countryPicker.getCountryAt({ lat, lon });
+        return country ? COUNTRY_ALTITUDE : 0;
     }
 
     /**
