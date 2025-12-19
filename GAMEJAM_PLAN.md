@@ -77,6 +77,28 @@
 
 ---
 
+## Globe Features Needed (see GLOBE_FEATURES.md)
+
+Features for the reveal sequence when showing results:
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| `MultiPinManager` | ✅ Done | Display multiple player pins simultaneously |
+| `CorrectLocationMarker` | ✅ Done | Gold star marker for correct answer |
+| `ArcDrawer` | ❌ TODO | Animated geodesic arcs from player pins to correct location |
+| `DistanceLabelManager` | ❌ TODO | Show "1,234 km" labels above pins with count-up animation |
+| `animateCameraToFrame()` | ❌ TODO | Smoothly move camera to frame all pins + correct answer |
+| Player Colors | ✅ Done | 8 distinguishable colors in `playerColors.ts` |
+
+**Reveal Sequence Flow:**
+1. Show all player pins (MultiPinManager)
+2. Show correct answer marker (CorrectLocationMarker)
+3. Frame camera to see everything (animateCameraToFrame)
+4. Draw arcs from pins to correct location (ArcDrawer)
+5. Show distance labels with count-up animation (DistanceLabelManager)
+
+---
+
 ## EarthGlobe API for Client (Kalle)
 
 Current public API you can use:

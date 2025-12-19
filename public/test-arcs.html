@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Arc Drawer Test</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #renderCanvas {
+        width: 100%;
+        height: 100vh;
+        touch-action: none;
+      }
+      #controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: monospace;
+        font-size: 14px;
+      }
+      button {
+        margin: 5px;
+        padding: 8px 16px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="controls">
+      <h3>Arc Drawer Test</h3>
+      <button id="addArcs">Add Test Arcs</button>
+      <button id="animate">Animate All (2s)</button>
+      <button id="clear">Clear Arcs</button>
+      <div id="status" style="margin-top: 10px;"></div>
+    </div>
+    <script type="module" src="/src/testArcDrawer.ts"></script>
+    <!-- Console logger - streams browser console to file for Claude -->
+    <script type="module" src="/shared/consoleLogger.ts"></script>
+  </body>
+</html>
