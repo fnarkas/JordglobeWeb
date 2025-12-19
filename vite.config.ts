@@ -23,6 +23,9 @@ export default defineConfig({
           if (req.url === '/party' || req.url === '/party/') {
             req.url = '/party.html';
           }
+          if (req.url === '/host' || req.url === '/host/') {
+            req.url = '/host.html';
+          }
           next();
         });
       }
