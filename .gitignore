@@ -22,4 +22,8 @@ Thumbs.db
 
 # WASM build artifacts (source wasm gets copied to public/)
 wasm/*.wasm
+
+# Log files
 browser-console.log
+game-server.log
+*.log
