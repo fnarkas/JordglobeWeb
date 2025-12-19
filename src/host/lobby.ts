@@ -9,6 +9,7 @@ interface Player {
     name: string;
     isFirst: boolean;
     score?: number;
+    hasAnswered?: boolean;
 }
 
 class HostLobby {
@@ -86,6 +87,10 @@ class HostLobby {
                     case 'question':
                         this.showQuestion(message.city);
                         break;
+
+                    case 'player-answered':
+                        this.markPlayerAnswered(message.playerName);
+                        break;
                 }
             } catch (err) {
                 console.error('Error parsing message:', err);
@@ -134,7 +139,24 @@ class HostLobby {
         this.questionOverlay.innerHTML = `
             <div style="color: rgba(255,255,255,0.7); font-size: 1rem; margin-bottom: 10px;">Where is...</div>
             <div id="cityName" style="color: #e94560; font-size: 2.5rem; font-weight: bold;"></div>
+            <div id="answerStatus" style="margin-top: 20px; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;"></div>
         `;
+
+        // Add CSS animation for dots
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes dotPulse {
+                0%, 20% { opacity: 0; }
+                40% { opacity: 1; }
+                100% { opacity: 0; }
+            }
+            .waiting-dots span {
+                animation: dotPulse 1.4s infinite;
+            }
+            .waiting-dots span:nth-child(2) { animation-delay: 0.2s; }
+            .waiting-dots span:nth-child(3) { animation-delay: 0.4s; }
+        `;
+        document.head.appendChild(style);
         document.querySelector('.globe-container')?.appendChild(this.questionOverlay);
     }
 
@@ -144,7 +166,42 @@ class HostLobby {
         const cityEl = this.questionOverlay.querySelector('#cityName');
         if (cityEl) cityEl.textContent = city;
 
+        // Reset all players' answer status
+        this.players = this.players.map(p => ({ ...p, hasAnswered: false }));
+        this.updateAnswerStatus();
+
         this.questionOverlay.style.display = 'block';
+    }
+
+    private updateAnswerStatus(): void {
+        const statusEl = this.questionOverlay?.querySelector('#answerStatus');
+        if (!statusEl) return;
+
+        statusEl.innerHTML = this.players.map(p => `
+            <div style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 15px;
+                background: ${p.hasAnswered ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255,255,255,0.1)'};
+                border-radius: 20px;
+                border: 1px solid ${p.hasAnswered ? '#4CAF50' : 'transparent'};
+            ">
+                <span style="color: white;">${p.name}</span>
+                ${p.hasAnswered
+                    ? '<span style="color: #4CAF50; font-size: 1.2rem;">✓</span>'
+                    : '<span class="waiting-dots" style="color: rgba(255,255,255,0.5);"><span>.</span><span>.</span><span>.</span></span>'
+                }
+            </div>
+        `).join('');
+    }
+
+    private markPlayerAnswered(playerName: string): void {
+        const player = this.players.find(p => p.name === playerName);
+        if (player) {
+            player.hasAnswered = true;
+            this.updateAnswerStatus();
+        }
     }
 
     private updateLobbyPlayerList(): void {
