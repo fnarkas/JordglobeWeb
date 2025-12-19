@@ -3,7 +3,7 @@
  * Handles game logic - what happens when pins are placed
  */
 
-import type { CountryPolygon, LatLon } from './countryPicker';
+import type { CountryPolygon, LatLon } from '../countryPicker';
 
 export class Game {
     private clearedCountries: Set<string> = new Set();

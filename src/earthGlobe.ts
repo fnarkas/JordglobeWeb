@@ -40,7 +40,7 @@ import { createWaterMaterial } from './waterShader';
 import { CountryPicker, calculateBoundingBox, cartesianToLatLon, type CountryPolygon, type LatLon } from './countryPicker';
 import { CountrySelectionBehavior } from './countrySelectionBehavior';
 import { PinManager } from './pinManager';
-import { Game } from './game';
+import { Game } from './host/game';
 
 // Import shaders
 import animatedVertexShader from './shaders/animated.vertex.glsl?raw';

@@ -6,7 +6,7 @@ if (import.meta.env.DEV) {
     import('@babylonjs/inspector');
 }
 
-import { EarthGlobe } from './earthGlobe';
+import { EarthGlobe } from '../earthGlobe';
 
 // Initialize the application when page loads
 window.addEventListener('DOMContentLoaded', () => {
@@ -17,4 +17,4 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Export for external use
 export { EarthGlobe };
-export type { CountryPolygon, LatLon } from './countryPicker';
+export type { CountryPolygon, LatLon } from '../countryPicker';
