@@ -35,6 +35,7 @@ const hosts = new Set();
 let gameStarted = false;
 let currentCity = null;
 const answers = new Map(); // playerName -> { lat, lon }
+const scores = new Map();  // playerName -> total score
 
 function broadcast(message) {
     const data = JSON.stringify(message);
@@ -48,7 +49,8 @@ function broadcast(message) {
 function getPlayerList() {
     return players.map(p => ({
         name: p.name,
-        isFirst: p.isFirst
+        isFirst: p.isFirst,
+        score: scores.get(p.name) || 0
     }));
 }
 
@@ -88,6 +90,15 @@ function checkAllAnswered() {
     // Sort by distance (closest first)
     results.sort((a, b) => a.distance - b.distance);
 
+    // Assign points: last place = 0, 2nd last = 1, etc.
+    const numPlayers = results.length;
+    results.forEach((r, i) => {
+        r.points = numPlayers - 1 - i;
+        const currentScore = scores.get(r.name) || 0;
+        scores.set(r.name, currentScore + r.points);
+        r.totalScore = scores.get(r.name);
+    });
+
     console.log('All answered! Results:', results);
 
     broadcast({
@@ -98,7 +109,8 @@ function checkAllAnswered() {
             lat: currentCity.lat,
             lon: currentCity.lon
         },
-        results: results
+        results: results,
+        players: getPlayerList()
     });
 }
 

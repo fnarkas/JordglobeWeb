@@ -146,12 +146,18 @@ class HostLobby {
         document.querySelector('.globe-container')?.appendChild(this.resultsOverlay);
     }
 
-    private showResults(correct: { name: string; country: string }, results: { name: string; distance: number }[]): void {
+    private showResults(correct: { name: string; country: string }, results: { name: string; distance: number; points: number }[], players?: Player[]): void {
         if (!this.resultsOverlay) return;
 
         // Hide question overlay
         if (this.questionOverlay) {
             this.questionOverlay.style.display = 'none';
+        }
+
+        // Update players and leaderboard if provided
+        if (players) {
+            this.players = players;
+            this.updateLeaderboard();
         }
 
         this.resultsOverlay.innerHTML = `
@@ -183,7 +189,8 @@ class HostLobby {
                             color: white;
                         ">${i + 1}</span>
                         <span style="flex: 1; color: white; font-size: 1.1rem;">${r.name}</span>
-                        <span style="color: ${i === 0 ? '#4CAF50' : 'rgba(255,255,255,0.7)'}; font-weight: bold;">${r.distance.toLocaleString()} km</span>
+                        <span style="color: rgba(255,255,255,0.5); margin-right: 15px;">${r.distance.toLocaleString()} km</span>
+                        <span style="color: ${r.points > 0 ? '#4CAF50' : 'rgba(255,255,255,0.5)'}; font-weight: bold;">+${r.points}p</span>
                     </div>
                 `).join('')}
             </div>
